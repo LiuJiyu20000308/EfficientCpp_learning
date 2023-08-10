@@ -164,6 +164,336 @@
 \begin{document}
 \maketitle
 
+\section{Accustoming yourself to C++}
+
+\subsection{Prefer \texttt{const, enum, inline} to \texttt{\#define}}
+\label{sec:Item-2}
+\begin{itemize}
+\item \texttt{\#define} will be confusing if you get an error during
+  complication.
+\item Use of \texttt{constant} yield smaller code than using a
+  \texttt{\#define}.
+\end{itemize}
+
+When replacing \texttt{\#defines} with constants, there are two
+spectial cases:
+\begin{itemize}
+\item Defining constant pointers'': \texttt{const char* const
+    authorName = "xxx''}
+\item Concerning class-specific constants. To limit the scope od a
+  constant to a class, you must make it a member, to ensure there is
+  at most one copy of the constant, you must make it a \texttt{static}
+  member.
+\begin{verbatim}
+class Game{
+private:
+  static const int Nums = 5;
+  int scores[Nums];
+  ...
+};
+\end{verbatim}
+  If it is an integral type (integers, chars, bools), we do not need
+  provide a definition. Otherwise we need a separate definition in
+  \textbf{implementation file}:
+\begin{verbatim}
+const int Game::Nums; // definition of Nums, no initial value here.
+\end{verbatim}
+  There is no way to carete a class-specific constant using a
+  \texttt{\#define}.
+
+ 
+\item  In another way, we can use "enum hack'':
+  \begin{verbatim}
+class Game{
+private:
+  enum {Nums = 5};
+  int scores[Nums];
+  ...
+};
+\end{verbatim}
+  \begin{itemize}
+  \item The enum hack behaves in some ways more like a \texttt{\#define},
+  for example, it's legal to take the address of a const but not to an
+  enum. 
+\item Also, enums never result in unnecessary memory
+  allocation. 
+\item the enum hack is a fundamental technique of template
+  metaprogramming. (see Section \ref{sec:Item-48})
+  \end{itemize}
+\end{itemize}
+
+Another common misuse of the \texttt{\#define} is using it to
+implement macros that look like functions but that do not incur the
+overhead of a function call. For example:
+\begin{verbatim}
+#define CALL_WITH_MAX(a,b) f( (a) > (b) ? (a) : (b) )
+\end{verbatim}
+
+You have to remember to parenthesize all the arguments in the macro
+body. Oherwise you will run into trouble. However, even you get that
+right, the weird things can happen:
+\begin{verbatim}
+int a = 5, b = 0;
+CALL_WITH_MAX(++a, b);    // a is incremented twice
+CALL_WITH_MAX(++a, b+10); // a is incremented once
+\end{verbatim}
+
+Now we can use a template for an inline function in Section \ref{sec:Item-30}
+\begin{verbatim}
+template <class T>
+inline void callWithMax(const T& a, const T &b){
+  f(a > b ? a : b);
+} // because we donot know what T is, we pass by reference-to-const.
+\end{verbatim}
+
+\subsection{Use \texttt{const} whenever possible}
+\label{sec:Item-3}
+The \texttt{const} keyword is remarkably versatile. For pointers, you
+can specify whethwe the pointer itself is const or the data is const:
+\begin{verbatim}
+char greeting[] = "Heello";
+const char *p = greeting;  //non-const pointer, const data
+char *const p = greeting;  //const pointer, non-const data
+const std::vector<int>::iterator iter = vec.begin(); // iter acts like a T *const;
+++ iter;  // error! iter is const.
+std::vector<int>::const_iterator cIter = vec.begin(); // iter acts like a const T*
+*cIter = 10; // error! *cIter is const.
+\end{verbatim}
+
+Some of the most powerful uses of \texttt{const} stem from its
+application to function declarations:
+
+\begin{itemize}
+\item \textbf{Having a function return a constant value} sometimes can reduce
+  the incidence of the clinent errors without giving up safety or
+  efficiency. For example: In Section \ref{sec:Item-24}
+\begin{verbatim}
+const Rational operator*(const Rational &lhs, const Rational &rhs);
+\end{verbatim}
+  We can avoid the unintentional error like \texttt{if(a * b = c)}.
+  Such code would be illegal if a and b were of a built-in
+  type. \textbf{ One of the hallmarks of good user-defined types is
+    that they avoid gratuitous incompatibilities with built-in types.}
+  (see Section \ref{sec:Item-18})
+\item The purpose of \textbf{const on member functions} is to identify
+  which member functions may be invoked on \texttt{const} objects,
+  which are important for two reasons:
+  \begin{itemize}
+  \item They make the interface of a class easier to understand. It is
+    important to know which functions may modify an object.
+  \item They make it possible to work with \texttt{const}
+    objects. There is a fundamental ways to improve performance, which
+    is \textbf{pass objects by reference-to-const}, which will
+    explains in Section \ref{sec:Item-20}.
+  \end{itemize}
+\item \textbf{Member functions differing only in \texttt{constness}}
+  can be overloaded, which is an important feature of C++. For
+  example:
+\begin{verbatim}
+class TextBlock{
+public:
+  const char &operator[](std::size_t position) const;
+  char &operator[](std::size_t position);
+};
+\end{verbatim}
+By overloading and giving the different versions different return
+types, you can have \texttt{const} and non-\texttt{const} TextBlocks
+handled differently.
+\item There are two prevailing notions of \texttt{const}:
+  \textbf{bitwise const} and \textbf{logical const}. Bitwise constness
+  is easy to understand, for logical constness, here is an example''
+\begin{verbatim}
+class CTextBlock{
+public:
+  std::size_t length() const;
+private:
+  char *pText;
+  std::size_t textLength;
+  bool lengthIsValid;
+};
+std::size_t CTextBlock::length() const{
+  if(!lengthIsValid){
+    textLength = std::strlen(pText); // error!
+    lengthIsValid = true;   // error!
+  }
+  return textLength;
+}
+\end{verbatim}
+Now the solution is simple: \texttt{mutable} frees non-static data
+members from the constraints of bitwise constness.
+
+\item \textbf{Avoiding Duplication in \texttt{const} and
+    \texttt{non-const} member functions}. Sometimes
+  \texttt{operator[]} in \texttt{TextBlock} not only returns a
+  reference to the character, it also performed bounds checking,
+  logged access information, etc. Putting all this in both functions
+  yields more compilation time, maintenance and code-bloat. It is
+  possible to move all codes into a seperate member function
+  (private).
+
+  There is an another way. That is, you want to have one version of
+  \texttt{operator[]} call the other one.
+\begin{verbatim}
+class TextBolock{
+public:
+  ...
+  const char &operator[](std::size_t position) const{ ... }
+  char &operator[](std::size_t position){
+    return const_cast<char&>(static_cast<const TextBlock&>(*this)[position]);
+  }
+\end{verbatim}
+  The one that removes \texttt{const} can be accomplished only via
+  \texttt{const\_cast}. Though casting is such a bad idea as a general
+  rule (see \ref{sec:Item-27}), but code duplication is no picnic
+  either. It is determined by you, but this technique is worth knowing.
+\end{itemize}
+
+\subsection{Make sure that objects are initialized before they are used}
+\label{sec:Item-4}
+
+If you are in the C part of C++ and initialization would probably
+incur a runtime cost, initialization is not guaranteed to take
+place. This explains why array (from C part of C++) isn't necessarily
+guaranteed to have its contents initialized but a vector is.
+The best way is to \textbf{always initialize objects before you use
+  them.}
+
+
+\begin{itemize}
+\item For built-in types, you need to do this manually, for else,
+the responsibility for initialization falls on constructors. However,
+\textbf{do not confuse assignment with initialization.}
+\begin{verbatim}
+class ABEntry{
+public:
+  ABEntry(const std::string &name, const stdLLstring &address);
+private:
+  std::string theName;
+  std::string theAddress;
+  int numTimesConsulted;
+};
+ABEntry::ABEntry(const std::string &name, const std::string &address){
+  theName = name;          \\ these are all assignments, not initializations.
+  theAddress = address;
+  numTimesConsulted = 0;
+}
+\end{verbatim}
+Their default constructors were automatically called prior to entering
+the ABEntry constructor. But this is not true for numTimesConsulted
+because it is a built-in type. For it, there is no guarantee it was
+initialized at all prior to its assignment.
+
+A better way is to use the member initialization list instead of
+assignments:
+\begin{verbatim}
+ABEntry::ABEntry(const std::string &name, const std::string &address)
+: theName(name), theAddress(address), numTimesConsulted(0)
+{} // these are now all initializations.
+\end{verbatim}
+It is more efficient because default consturctions were wasted before.
+
+For objects of built-in type, ifor consistency, it is often best to
+initialize everthing via member initialization. There is a policy of
+\textbf{always listing every data member on the initialization list}.
+\begin{verbatim}
+ABEntry::ABEntry(): theName(), theAddress(), numTimesConsulted(0)
+{}
+\end{verbatim}
+Sometimes initialization list must be used for built-in types. For
+example: data members that are \texttt{const} or \texttt{references}
+that must be initialized. (See \ref{sec:Item-5}).
+
+When class has multiple constructors, we can omit entries in the lists
+for data members where assignment works as well as true
+initialization, moving the assignments to a single function that all
+constructors call.
+
+One aspect of C++ that is not fickle is \textbf{the order in which an
+  object's data is initialized}. This order is always the same: base
+classes, derived clasees, data members in the order in which they are
+declared. (\textbf{When initialize an array, declare the size first.})
+
+\item \textbf{The order of initialization of non-local static objects difined
+    in different translation units} is important.
+
+  A \textbf{\texttt{static} object} is one that exists from the time it's
+  constructed until the end of the program, including global objects,
+  objects declared \texttt{static} inside classes, functions or at
+  file scope. \texttt{Static} objects inside functions are known as
+  local static objects.
+
+  If initialization of a non-local static object in one translation
+  unit uses a non-local static object in a different translation unit,
+  \textbf{the object it uses could be uninitialized.} For example, 
+\begin{verbatim}
+class FileSystem{
+public:
+  std::size_t numDisks() const;
+  ...
+};
+extern FileSystem tfs;
+\end{verbatim}
+  In another file, there is
+\begin{verbatim}
+class Directory{
+public:
+  Directory(params);
+  ...
+};
+Directory::Directory(params){ 
+  std::size_t disks = tfs.numDisks(); 
+  ...
+}
+\end{verbatim}
+Further suppose the client decides to create a single Diretory object \texttt{tempDir},
+\texttt{tfs} and \texttt{tempDir} are created by different people at
+different times in different source files. How can you be sure that
+\texttt{tfs} will be initialized before \texttt{tempDir}? You can't
+because \textbf{the relatice order of initilization of non-local
+  static objects defined in different translation units is undefined.}
+
+Fortunately, a small design change eliminates the problem
+entirely. All that has to be done is to \textbf{move each non-local
+  static object into its own function, where it's declared
+  \texttt{static}}. This approach is founded on C++'s guarantee that local
+static objects are initilized when the object's definition is first
+encountered during a call to that function.
+\begin{verbatim}
+FileSystem &tfs(){
+  static FileSystem fs;
+  return fs;
+}
+Directory &tempDir(){
+  static Directory td(params);
+  return td;
+}
+\end{verbatim}
+The reference-returning functions dictated by this scheme are always
+simple, which makes them excellent candidates for inlining. On the
+other hand, it make them problematic in multithreaded systems. One way
+to deal with it is to invoke all the reference-returning functions
+during the single-threaded startup portion of the program.
+\end{itemize}
+
+To avoid using objects before they are initialized, you need to do
+three things:
+\begin{itemize}
+\item manually initialize non-member objects of built-in types
+\item use member initialization lists to initialize all parts of an
+  object
+\item design around the initialization order uncertainty that afflicts
+  non-local static objects defined in separate translation units.
+\end{itemize}
+
+\newpage
+\section{Constructors, destructors, assignment operators}
+
+\subsection{Know what functions C++ silently writes and calls}
+\label{sec:Item-5}
+
+
+
+
 \end{document}
 %%% Local Variables:
 %%% mode: latex
