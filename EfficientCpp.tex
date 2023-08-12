@@ -163,7 +163,9 @@
 
 \begin{document}
 \maketitle
+\tableofcontents
 
+\newpage
 \section{Accustoming yourself to C++}
 
 \subsection{Prefer \texttt{const, enum, inline} to \texttt{\#define}}
@@ -490,6 +492,292 @@ three things:
 
 \subsection{Know what functions C++ silently writes and calls}
 \label{sec:Item-5}
+
+Compilers will declare their own versions of a copy constructor, copy
+assignment, destructor if you don't declare them. Further more, if you
+declare no constructors, compliers will also declare a default
+constructor. All these functions are \texttt{public and inline} (See
+\ref{sec:Item-30}).
+\begin{verbatim}
+class Empty
+public:
+  Empty() { ... } // default constructor
+  Empty(const Empty& rhs) { ... } // copy constructor
+  ~Empty() { ... } // destructor — see below for whether it’s virtual
+  Empty& operator=(const Empty& rhs) { ... } // copy assignment operator
+};
+\end{verbatim}
+\begin{itemize}
+\item The generated destructor is \textbf{non-virtual} (See \ref{sec:Item-7})
+  unless it's for a class inheriting from a base class that declares a
+  virtual destructor,
+\item The copy constructor and assignment simply copy each non-static
+  data member.
+\item If you want to support copy assignment in a class \textbf{containing a
+  reference or const member}, you must define the copy assignment
+  operator yourself.
+\item Compilers reject implicit copy assignment operators in derived
+  classes that inherit from \textbf{base classes declaring the copy assignment
+  operator \texttt{private}}.
+\end{itemize}
+
+\subsection{Explicitly disallow the use of compilergenerated functions
+  you do not want.}
+\label{sec:Item-6}
+
+Use \texttt{=delete} or declare \texttt{private} and give no
+implementations if you don't want a class to support a particular
+kind of copy functionality.
+
+\subsection{Declare destructors virtual in polymorphic base classes.}
+\label{sec:Item-7}
+
+A particluar example is get function of a factory, we will get a
+pointer to a base class. If we declare destructors non-virtual, \textbf{the
+  object will be partially destroyed}.
+
+\begin{itemize}
+\item If a class does not contain virtual functions, that often indicates it is
+not meant to be used as a base class, so making the
+destructor virtual is usually a bad idea because the size of the
+class will increase. \textbf{Declare a virtual destructor in a
+class if and only if that class contains at least one virtual function.}
+\item The implementation of virtual functions requires that objects carry
+information that can be used at runtime to determine which virtual
+functions should be invoked on the object. This information typically
+takes the form of a pointer called a \texttt{vptr}. The
+\texttt{vptr} points to an array of function pointers called a
+\texttt{vtbl}; each class with virtual functions has an associated
+\texttt{vtbl}. When a virtual function is invoked on an object, the
+actual function called is determined by following the object's
+\texttt{vptr} to a \texttt{vtbl} and then looking up the appropriate
+function pointer in the \texttt{vtbl}. 
+\item Not all base classes are designed to be used polymorphically. \textbf{Neither
+the standard string type, for example, nor the STL container types are
+designed to be base classes at all,} much less polymorphic ones.
+\item If we want an abstract base class, we can declare a pure virtual
+  destructor, but \textbf{we must provide a definition for the pure
+    virtual destructor.}
+\end{itemize}
+
+\subsection{Prevent exceptions from leaving destructors}
+\label{sec:Item-8}
+
+\begin{itemize}
+\item  Destructors should never emit exceptions. If functions called in a
+destructor may throw, the destructor should catch any exceptions,
+then swallow them or terminate the program.
+\item If class clients need to be able to react to exceptions thrown during
+an operation, the class should provide a regular (i.e.,
+non-destructor) function that performs the operation.
+\end{itemize}
+
+
+\subsection{Never call virtual functions during construction or
+  destruction}
+\label{sec:Item-9}
+
+\begin{itemize}
+\item \textbf{During base class construction of a derived class object, the
+  type of the object is that of the base class.}  Not only do virtual
+functions resolve to the base class, but the
+parts of the language using runtime type information (e.g.,
+\texttt{dynamic\_cast} (see \ref{sec:Item-27}) and \texttt{typeid})
+treat the object as a base class type.
+\item The same reasoning applies during destruction.
+\item It's not always so easy to detect calls to virtual functions
+  during construction or destruction.
+\begin{verbatim}
+class Transaction {
+public:
+  Transaction() { init(); } // call to non-virtual...
+  virtual void logTransaction() const = 0;
+  ...
+private:
+void init() {
+  ...
+  logTransaction(); // ...that calls a virtual!
+}
+};
+\end{verbatim}
+\end{itemize}
+
+\subsection{Have assignment operators return a reference to
+  \texttt{*this}}
+\label{sec:Item-10}
+
+One of the interesting things about assignments is that you can chain
+them together:
+\begin{verbatim}
+int x, y, z;
+x = y = z = 15; // chain of assignments.
+x = (y = (z = 15)); //equivalent.
+\end{verbatim}
+
+The way this is implemented is that \textbf{assignment returns a
+  reference to its left-hand argument}. This convention applies to all
+assignment operators.
+
+\begin{verbatim}
+class Widget {
+public:
+  ...
+  Widget &operator=(const Widget &rhs){
+    ...
+    return *this;
+  }
+  Widget& operator+=(const Widget& rhs) // the convention applies to 
+  {                                     // +=, -=, *=, etc.
+    ...
+    return *this;
+  }
+Widget& operator=(int rhs)              // it applies even if the
+  {                                     // operator’s parameter type
+  ...                                   // is unconventional
+  return *this;
+  }
+};
+\end{verbatim}
+
+\subsection{Handle assignment to self in \texttt{operator=}}
+\label{sec:Item-11}
+
+If you follow the advice of \ref{sec:Item-13} and \ref{sec:Item-14},
+you'll always use objects to  manage resources, and you'll make sure
+that the resource-managing objects behave well when copied.
+
+If you try to manage resources yourself, however (which you'd
+certainly have to do if you were writing a resourcemanaging class),
+you can fall into the trap of \textbf{accidentally releasing a
+  resource} before you're done using it. For example,
+\begin{verbatim}
+Widget& Widget::operator=(const Widget& rhs) // unsafe impl. of operator=
+{
+  delete pb; // stop using current bitmap
+  pb = new Bitmap(*rhs.pb);                  // start using a copy of rhs’s bitmap
+  return *this;                              
+}
+\end{verbatim}
+
+Now, the self-assignment problem here is that itself holds a pointer
+to a deleted object! There are three ways to prevent this error.
+
+\begin{itemize}
+\item check for assignment to self via an identity test at the top of
+  \texttt{operator=}.
+\begin{verbatim}
+Widget& Widget::operator=(const Widget& rhs){
+  if (this == &rhs) return *this; // identity test: if a self-assignment, do nothing
+  delete pb;
+  pb = new Bitmap(*rhs.pb);
+  return *this;
+}
+\end{verbatim}
+  This works but there is also exception-unsafe. If the "new Bitmap''
+  expression yields an exception (either because there is insufficient
+  memory for the allocation or because Bitmap's copy constructor
+  throws one), the Widget will end up holding a pointer to a deleted
+  Bitmap.  You can't safely delete them. You can't even safely read them.
+
+\item  \ref{sec:Item-29} explores exception safety in depth,
+but in this Item, it suffices to observe that in many cases, a careful
+ordering of statements can yield exception-safe code.
+\begin{verbatim}
+Widget& Widget::operator=(const Widget& rhs)
+{
+  Bitmap *pOrig = pb; // remember original pb
+  pb = new Bitmap(*rhs.pb); // point pb to a copy of rhs’s bitmap
+  delete pOrig; // delete the original pb
+  return *this;
+}
+\end{verbatim}
+Now, if "\texttt{new Bitmap}'' throws an exception, \texttt{pb}
+remains unchanged. 
+\item If you're concerned about efficiency, use the technique known as
+  "\textbf{copy and swap}'', which is described in \ref{sec:Item-29}.
+\begin{verbatim}
+class Widget {
+  ...
+  void swap(Widget& rhs); // exchange *this’s and rhs’s data, see Item 29 for details
+};
+Widget& Widget::operator=(const Widget& rhs){
+  Widget temp(rhs); // make a copy of rhs’s data
+  swap(temp); // swap *this’s data with the copy’s
+  return *this;
+}
+\end{verbatim}
+\item Make sure that any function operating on more than one object
+  behaves correctly if two or more of the objects are the same.
+\end{itemize}
+
+\subsection{Copy all parts of an object}
+\label{sec:Item-12}
+
+When you're writing a copying function, be sure to
+\begin{itemize}
+\item copy \textbf{all} local data members,
+\begin{verbatim}
+class Customer {
+public:
+  ...
+  Customer(const Customer& rhs);
+  Customer& operator=(const Customer& rhs);
+  ...
+private:
+  std::string name;
+  Date lastTransaction;
+};
+
+Customer::Customer(const Customer& rhs)
+: name(rhs.name){} // copy rhs’s data  Data has been forgotten!!!
+
+Customer& Customer::operator=(const Customer& rhs)
+{
+  name = rhs.name; // copy rhs’s data
+  return *this;    //  DATE!
+}
+\end{verbatim}
+\item invoke the appropriate copying function in \textbf{all base
+    classes}.
+\begin{verbatim}
+class PriorityCustomer: public Customer { // a derived class
+public:
+  ...
+  PriorityCustomer(const PriorityCustomer& rhs);
+  PriorityCustomer& operator=(const PriorityCustomer& rhs);
+  ...
+private:
+  int priority;
+};
+PriorityCustomer::PriorityCustomer(const PriorityCustomer& rhs)
+: Customer(rhs), // invoke base class copy ctor
+  priority(rhs.priority){}
+PriorityCustomer&
+PriorityCustomer::operator=(const PriorityCustomer& rhs)
+{
+  Customer::operator=(rhs); // assign base class parts
+  priority = rhs.priority;
+  return *this;
+}
+\end{verbatim}
+\item if you find that your copy constructor and copy assignment
+operator have similar code bodies, \textbf{eliminate the duplication by
+creating a third member function that both call}.
+\end{itemize}
+
+\section{Resource Management}
+
+This chapter begins with a straightforward object-based approach to
+resource management built on C++'s support for constructors,
+destructors, and copying operations. Experience has shown that
+disciplined adherence to this approach can all but eliminate resource
+management problems. The chapter then moves on to Items dedicated
+specifically to memory management. These latter Items complement
+the more general Items that come earlier, because objects that manage
+memory have to know how to do it properly.
+
+\subsection{Use objects to manage resources}
+\label{sec:Item-13}
 
 
 

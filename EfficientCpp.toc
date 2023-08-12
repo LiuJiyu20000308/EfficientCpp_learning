@@ -1,0 +1,15 @@
+\contentsline {section}{\numberline {1}Accustoming yourself to C++}{2}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Prefer {\color {blue} \texttt {const, enum, inline}} to {\color {blue} \texttt {\#define}}}{2}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Use {\color {blue} \texttt {const}} whenever possible}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Make sure that objects are initialized before they are used}{5}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Constructors, destructors, assignment operators}{8}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Know what functions C++ silently writes and calls}{8}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Explicitly disallow the use of compilergenerated functions you do not want.}{8}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Declare destructors virtual in polymorphic base classes.}{8}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Prevent exceptions from leaving destructors}{9}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}Never call virtual functions during construction or destruction}{9}{subsection.2.5}%
+\contentsline {subsection}{\numberline {2.6}Have assignment operators return a reference to {\color {blue} \texttt {*this}}}{9}{subsection.2.6}%
+\contentsline {subsection}{\numberline {2.7}Handle assignment to self in {\color {blue} \texttt {operator=}}}{10}{subsection.2.7}%
+\contentsline {subsection}{\numberline {2.8}Copy all parts of an object}{11}{subsection.2.8}%
+\contentsline {section}{\numberline {3}Resource Management}{12}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Use objects to manage resources}{12}{subsection.3.1}%
