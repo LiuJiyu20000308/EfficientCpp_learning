@@ -16,6 +16,9 @@
 \pagenumbering{arabic} 
 \usepackage{pdfpages}
 % useful packages.
+
+\usepackage{ctex}
+
 \usepackage{color}
 \usepackage{multirow}
 \usepackage{caption}
@@ -765,6 +768,7 @@ operator have similar code bodies, \textbf{eliminate the duplication by
 creating a third member function that both call}.
 \end{itemize}
 
+\clearpage
 \section{Resource Management}
 
 This chapter begins with a straightforward object-based approach to
@@ -779,7 +783,196 @@ memory have to know how to do it properly.
 \subsection{Use objects to manage resources}
 \label{sec:Item-13}
 
+To make sure that the resource  is always released, we need to put
+that resource inside an object whose destructor will automatically
+release the resource when control leaves domain.
+\begin{verbatim}
+void f(){
+  std::auto_ptr<Investment> pInv(createInvestment()); // call factory function
+   ... 
+} // automatically delete pInv via auto_ptr’s dtor
+\end{verbatim}
 
+This simple example demonstrates the two critical aspects of using
+objects to manage resources:
+\begin{itemize}
+\item \textbf{Resources are acquired and immediately turned over to
+  resource-managing objects}: the resource returned by
+  \texttt{createInvestment} 
+  is used to initialize the \texttt{auto\_ptr} that will manage it. In 
+fact, the idea of using objects to manage resources is often called
+\textbf{Resource Acquisition Is Initialization (RAII)}.
+\item \textbf{Resource-managing objects use their destructors to ensure
+that resources are released}.
+\end{itemize}
+
+See more details of smart pointers in Section \ref{sec:SmartPointer}.
+\textbf{Pay attention to smart pointer to aynamically allocated arrays.}
+
+If you need to craft your own resource-managing
+classes, that's not terribly difficult to do, but it does need to
+consider of Section \ref{sec:Item-14} and \ref{sec:Item-15}.
+
+\subsection{Think carefully about copying behavior in
+  resource-managing classes.}
+\label{sec:Item-14}
+
+What should happen when an RAII object is copied? Most of the time,
+you'll want to choose one of the following possibilities:
+
+\begin{itemize}
+\item \textbf{Prohibit copying}: declare the copying operations
+  private.
+\item \textbf{Reference-count the underlying resource}: See
+  \texttt{shared\_ptr}.
+\item \textbf{Copy the underlying resource}: copying a
+  resource-managing object performs a "deep copy''.
+\item \textbf{Transfer ownership of the underlying resource}: See \texttt{unique\_ptr}.
+\end{itemize}
+
+\subsection{Provide access to raw resources in resource-managing classes. }
+\label{sec:Item-15}
+
+In a perfect world, you'd rely on such classes for all your
+interactions with resources, never sullying your hands with direct
+access to raw resources. But the world is not perfect. There are two
+general ways to do it: \textbf{explicit conversion } and
+\textbf{implicit conversion}.
+
+\begin{itemize}
+\item \texttt{shared\_ptr} and \texttt{unique\_ptr} both offer a get
+  member function to perform an \textbf{explicit conversion}, i.e., to return
+  (a copy of) the raw pointer inside the smart pointer object.
+\begin{verbatim}
+FontHandle getFont(); // from C API — params omitted for simplicity
+void releaseFont(FontHandle fh); // from the same C API
+
+class Font { // RAII class
+public:
+  explicit Font(FontHandle fh) // acquire resource; use pass-by-value,because the C API does
+  : f(fh){}
+  ~Font() { releaseFont(f ); } // release resource
+  FontHandle get() const { return f; } // explicit conversion function
+  ... // handle copying (see Item 14)
+private:
+  FontHandle f; // the raw font resource
+};
+\end{verbatim}
+\item However, sometimes we might find the need to explicitly request
+  such conversions off-putting enough to avoid using the class . That,
+  in turn,would increase the chances of leaking fonts.
+\item The alternative is to have \texttt{Font} offer an implicit conversion
+  function to its \texttt{FontHandle}, which  makes calling into the C
+  API easy and natural:
+\begin{verbatim}
+class Font {
+public:
+  operator FontHandle() const // implicit conversion function
+  { return f; }
+  ...
+};
+\end{verbatim}
+\item The downside is that implicit conversions increase the chance of
+errors. For example, a client might \textbf{accidently} create a
+\texttt{FontHandle} when a \texttt{Font} was intended:
+\begin{verbatim}
+Font f1(getFont());
+FontHandle f2 = f1;
+\end{verbatim}
+When \texttt{f1} is destroyed, the font will bereleased, and
+\texttt{f2} will dangle.
+\end{itemize}
+
+In general, explicit conversion is safer, but implicit conversion is
+more convenient for clients.
+
+It may have occurred to you that functions returning the raw resource
+inside an RAII class are \textbf{contrary to encapsulation}.  That's
+true, but it's not the design disaster it may at first appear, it
+hides what clients don't need to see, but it makes available those
+things that clients honestly need to access.
+
+\subsection{Use the same form in corresponding uses of new and delete}
+\label{sec:Item-16}
+
+\begin{verbatim}
+std::string *stringArray = new std::string[100];
+...
+delete stringArray;
+\end{verbatim}
+
+At the very least, 99 of the 100 string objects pointed to by stringArray
+are unlikely to be properly destroyed, because \textbf{their
+  destructors will probably never be called}.
+
+The memory layout for single objects is generally different
+from the memory layout for arrays. In particular, the memory for an
+array usually includes the size of the array, thus making it easy for
+delete to know how many destructors to call.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width = 0.5\textwidth]{ArrayMemLayout.png}
+\end{figure}
+
+The rule is simple: if you use [] in a \texttt{new} expression, you
+must use [] in the corresponding \texttt{delete} expression. If you
+don't use [] in a \texttt{new} expression, don't use [] in the
+matching \texttt{delete} expression.
+
+\subsection{Store newed objects in smart pointers in standalone statements.}
+\label{sec:Item-17}
+
+Suppose we have a function to reveal our processing priority and a
+second function to do some processing on a dynamically allocated
+Widget in accord with a priority:
+
+\begin{verbatim}
+int priority();
+void processWidget(std::tr1::shared_ptr<Widget> pw, int priority);
+\end{verbatim}
+
+Consider now a call to \texttt{processWidget}:
+\begin{verbatim}
+processWidget(new Widget, priority());
+\end{verbatim}
+
+It won't compile. \texttt{shared\_ptr'}s constructor taking a raw
+pointer is \texttt{explicit}, so there's no implicit conversion. The
+following code, however, will compile: 
+\begin{verbatim}
+processWidget(shared_ptr<Widget>(new Widget), priority());
+\end{verbatim}
+
+Although we're using object-managing resources everywhere here,
+\textbf{this call may leak resources}.
+
+Before \texttt{processWidget} can be called, then, compilers must generate
+code to do these three things:
+\begin{itemize}
+\item Call \texttt{priority}
+\item Execute \texttt{new Widget}
+\item Call the \texttt{shared\_ptr} constructor
+\end{itemize}
+
+If \texttt{new Widget} expression executed before \texttt{priority()},
+and  the call to \texttt{priority()} yields an exception, the pointer
+returned from \texttt{new Widget} will be lost.
+
+The way to avoid problems like this is simple: use a separate
+statement to create the \texttt{Widget} and store it in a smart pointer, then
+pass the smart pointer to \texttt{processWidget}:
+
+\begin{verbatim}
+std::tr1::shared_ptr<Widget> pw(new Widget); 
+processWidget(pw, priority());
+\end{verbatim}
+
+\clearpage
+\section{Designs and Declarations}
+
+
+\input{Appendix}
 
 
 \end{document}

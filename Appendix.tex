@@ -1,0 +1,81 @@
+\clearpage
+\section{Appendix}
+
+\subsection{智能指针}
+\label{sec:SmartPointer}
+\texttt{shared\_ptr}使用了引用计数（use count）技术，当复制个
+\texttt{shared\_ptr}对象时，被管理的资源并没有被复制，而是增加了引用计
+数。当析 构一个\texttt{shared\_ptr}对象时，也不会直接释放被管理的的资
+源，而是将引用计数减一。当引用计数为0时，才会真正的释放资源。
+\texttt{shared\_ptr}可以方便的共享资源而不必创建多个资源。
+
+\texttt{unique\_ptr}则不同。\texttt{unique\_ptr}独占资源，不能拷贝，只
+能移动。移动过后的\texttt{unique\_ptr}实例不再占有资源。当
+\texttt{unique\_ptr}被析构时，会释放所持有的资源。
+\begin{verbatim}
+unique_ptr<T> b = std::move(a);
+\end{verbatim}
+\texttt{weak\_ptr}可以解决\texttt{shared\_ptr}所持有的资源循环引用问题。
+\texttt{weak\_ptr}在指向\texttt{shared\_ptr}时，并不会增加
+\texttt{shared\_ptr}的引用计数。所以\texttt{weak\_ptr}并不知道
+\texttt{shared\_ptr}所持有的资源是否已经被释放。这就要求在使用
+\texttt{weak\_ptr}获取\texttt{shared\_ptr}时需要判断
+\texttt{shared\_ptr}是否有效。
+
+\begin{verbatim}
+struct Boo;
+struct Foo{
+    std::shared_ptr<Boo> boo;
+};
+struct Boo{
+    std::shared_ptr<Foo> foo;
+};
+\end{verbatim}
+
+\texttt{Foo}中有一个智能指针指向\texttt{Goo}，而\texttt{Goo}中也有一根
+智能指针指向\texttt{Foo}，这就是循环引用，我们可以使用
+\texttt{weak\_ptr}来解决这个问题。
+
+关于智能指针的一些tips：
+\begin{itemize}
+\item 智能指针抛开类型T，是线程安全的，因为智能指针底层使用的引用计数是
+\texttt{atomic}的原子变量，原子变量在自增自减时是线程安全的，这保证了
+多线程读写智能指针时是安全的。
+\item 尽可能不要使用裸指针初始化智能指针，因为可能存在同一个裸指针初始
+  了多个智能指针，在智能指针析构时会造成资源的多次释放。
+\item 不要从智能指针中使用\texttt{get}函数返回裸指针去为另一个智能指针
+  赋值，因为如果返回的裸指针被释放了，智能指针持有的资源也失效了，对智
+  能指针的操作是未定义的行为。
+\item \texttt{shared\_ptr}和\texttt{unique\_ptr}都可以用\texttt{reset}
+  函数来释放智能指针，但\texttt{shared\_ptr}没有\texttt{release}函数，
+  \texttt{unique\_ptr}的\texttt{release}函数会返回内置指针，并将自身置
+  为空。
+\item 与\texttt{uniqu\_ptr}不同，删除器不是\texttt{shared\_ptr}类型的
+  组成部分。假设，\texttt{shared\_ptr<T> sp2(q,deleter2)}，尽管
+  \texttt{sp1}和\texttt{sp2}有着不同的删除器，但两者的类型是一致的，都
+  可以被放入\texttt{vector<shared\_ptr<T>>}类型的同一容器里。
+\item 与\texttt{std::unique\_ptr}不同，自定义删除器不会改变
+  \texttt{std::shared\_ptr}的大小。其始终是祼指针大小的两倍。
+\item \texttt{shread\_ptr}和\texttt{unique\_ptr}都可以持有数组，但是这
+  里需要在\texttt{shared\_ptr}构造时传入\texttt{deleter}，用来销毁持有
+  的数组，默认删除器不支持数组对象，而\texttt{unique\_ptr}无需此操作，因为\texttt{unique\_ptr}重
+  载了\texttt{unique\_ptr(T[])}。\textbf{所有不是\texttt{new}分配内存
+    的资源都要给\texttt{shared\_ptr}传递一个删除器。}
+\item 不可以使用静态对象初始化智能指针，因为静态对象的生命周期和进程
+  一样长，而智能指针的析构的时候会导致静态资源被释放。这会导致未定义的
+  行为。
+\item 不要将\texttt{this}指针返回给\texttt{shared\_ptr}。当希望将
+  \texttt{this}指针托管给\texttt{shared\_ptr}时，类需要继承自
+  \texttt{std::enable\_shared\_from\_this}，并且从
+  \texttt{shared\_from\_this()}中获得\texttt{shared\_ptr}指针，否则有
+  double free的风险。 这样做可以的原因是继承自
+  \texttt{std::enable\_shared\_from\_this}后，内部数据结构会有shared
+  count 和 weak count，每次创建新的\texttt{share\_ptr}都会从这里获取，
+  这样就只有一个控制块，无论怎样增加和减少，都只有一份计数。
+\item \texttt{weak\_ptr}对弱引用计数的获取，实际上是对
+  \texttt{shared\_ptr}的引用计数的获取。弱引用计数最少是1，不会出现0。
+\end{itemize}
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "EfficientCpp"
+%%% End:
