@@ -75,6 +75,16 @@ struct Boo{
 \item \texttt{weak\_ptr}对弱引用计数的获取，实际上是对
   \texttt{shared\_ptr}的引用计数的获取。弱引用计数最少是1，不会出现0。
 \end{itemize}
+
+\subsection{万能引用}
+
+
+\subsection{零碎知识点}
+
+\begin{itemize}
+\item 普通左值引用无法指向右值，但常量左值引用可以指向右值，常用于拷贝
+  构造函数。
+\end{itemize}
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "EfficientCpp"

@@ -383,8 +383,8 @@ ABEntry::ABEntry(const std::string &name, const std::string &address){
   numTimesConsulted = 0;
 }
 \end{verbatim}
-Their default constructors were automatically called prior to entering
-the ABEntry constructor. But this is not true for numTimesConsulted
+\textbf{Their default constructors were automatically called prior to entering
+the ABEntry constructor. }But this is not true for numTimesConsulted
 because it is a built-in type. For it, there is no guarantee it was
 initialized at all prior to its assignment.
 
@@ -929,7 +929,7 @@ Widget in accord with a priority:
 
 \begin{verbatim}
 int priority();
-void processWidget(std::tr1::shared_ptr<Widget> pw, int priority);
+void processWidget(shared_ptr<Widget> pw, int priority);
 \end{verbatim}
 
 Consider now a call to \texttt{processWidget}:
@@ -964,17 +964,747 @@ statement to create the \texttt{Widget} and store it in a smart pointer, then
 pass the smart pointer to \texttt{processWidget}:
 
 \begin{verbatim}
-std::tr1::shared_ptr<Widget> pw(new Widget); 
+shared_ptr<Widget> pw(new Widget); 
 processWidget(pw, priority());
 \end{verbatim}
 
 \clearpage
-\section{Designs and Declarations}
+\section{设计与声明}
 
+\subsection{让接口容易被正确使用，不易被误用}
+\label{sec:Item-18}
 
+\begin{itemize}
+\item 首先必须考虑客户可能做出什么错误：
+\begin{verbatim}
+class Date {
+public:
+  Date(int month, int day, int year);
+  ...
+};
+\end{verbatim}
+这就很容易以错误的次序传递参数。
+\item 可以通过导入新类型来进行预防。
+\begin{verbatim}
+class Month {
+public:
+  static Month Jan() { return Month(1); } // functions returning all valid
+  ... // why these are functions, not other member functions
+private:
+  explicit Month(int m); // prevent creation of new Month values
+};
+\end{verbatim}
+  
+\item 预防客户错误另一个办法是限制类型内什么事情可以做，什么事情不可以
+  做，常见的就是加上\texttt{const}，可以看Section \ref{sec:Item-3}。
+\item 另一个一般性准则是尽量令types的行为与内置types一致，
+\item 任何接口如果要求客户必须记得做某些事，就是有着不正确使用的可能，
+  例如假如有一个\texttt{factory}函数，返回一个指针，那就有可能没有删除
+  指针或者二次删除。
+\begin{verbatim}
+Investment* createInvestment(); 
+\end{verbatim}
+  我们可以返回智能指针：
+\begin{verbatim}
+shared_ptr<Investment> createInvestment();
+\end{verbatim}
+  假设class设计者要将指针传递给一个\texttt{getRidOfInvestment}来进行删
+  除指针，那就要将它绑定为\texttt{shared\_ptr}的删除器：
+\begin{verbatim}
+shared_ptr<Investment> createInvestment(){
+  shared_ptr<Investment> retVal(static_cast<Investment*>(0),
+getRidOfInvestment);
+  retVal = ...; // make retVal point to the correct object
+  return retVal;
+}
+\end{verbatim}
+同时，智能指针有一个特别好的性质就是消除所谓的''cross-DLL prolbem''，
+这个问题发生于对象在动态链接程序库(DLL)只不过被\texttt{new}创建，却在
+另一个DLL中被delete，这会导致运行期错误。 因此经常用来自动解除互斥锁
+(mutex)。
+\end{itemize}
+
+\subsection{设计class犹如设计type}
+\label{sec:Item-19}
+
+\begin{itemize}
+\item \textbf{新type的对象应该如何被创建和销毁？} 这会影响到构造函数、
+  析构函数、内存分配函数和释放函数(\texttt{operator new, operator
+    new[], operator delete, operator delete[]}，见Section 8。
+\item \textbf{初始化和赋值该有什么样的差别？} 不要混淆了初始化和赋值。
+\item \textbf{新type的对象如果被按值传递，意味着什么？} 拷贝构造函数用
+  来定义一个type的pass-by-value该如何实现。
+\item \textbf{什么是新type的“合法值”？}
+\item\textbf{ 新type需要配合某个继承图系（inheritance graph）吗？} 注
+  意virtual和non-virtual的影响，见 Section\ref{sec:Item-34},
+  Section\ref{sec:Item-36}。如果你允许其他class继承该class，那会影响你
+  所声明的函数，尤其是析构函数，是否是virtual，见 Section
+  \ref{sec:Item-7}。
+\item \textbf{新type需要什么样的类型转换？} 如果你希望允许类型
+  \texttt{T1}被隐式转换为\texttt{T2}类型，就必须在\texttt{T1}内部写一
+  个类型转换函数(\texttt{operator T2})，或者在\texttt{T2}写一个
+  \texttt{non-explicit-one-argument}的构造函数。
+\item \textbf{什么样的操作符和函数对于新type而言是合理的？} 这决定你讲
+  为你的class声明哪些函数，其中某些是member，某些不是，见 Section
+  \ref{sec:Item-23}，\ref{sec:Item-24}，\ref{sec:Item-46}。
+\item \textbf{什么样的标准函数应该驳回？} 必须声明为\texttt{private}，
+  见 Section \ref{sec:Item-6}。
+\item \textbf{谁该取用新type的成员？} 这帮助你决定哪些成员为
+  \texttt{public}、\texttt{protected}、\texttt{private}，以及哪些class
+  或者function应该是\texttt{friend}，以及将它们嵌套于另一个之内是否合
+  理。
+\item \textbf{什么是新type的未声明接口（undeclared interface）？} 它对
+  效率、异常安全性（Section \ref{sec:Item-29}）以及资源运用（多任务锁
+  定和动态内存）提供何种保证？
+\item \textbf{新type有多么一般化？} 如果是定义一整个types家族，应该考
+  虑模板。
+\item \textbf{你真的需要一个新type吗？} 如果只是定义新的derived class
+  以便为既有的class添加机能，说不定单纯定义几个non-member函数更好。
+\end{itemize}
+
+\subsection{以pass-by-reference-to-const替换pass-by-value}
+\label{sec:Item-20}
+
+\begin{itemize}
+\item 以by reference-to-const方式传递参数可以减少拷贝构造和析构的开销
+\item 也可以避免slicing（对象切割）的问题，即当一个derived class对象以
+  by value方式传递并被视为一个base class对象。
+
+  references在编译器底层往往以指针形式实现，因此pass-by-reference通常
+  意味着真正传递的是指针。当然，如果是内置类型、STL的迭代器或者函数对
+  象，pass-by-value效率更高。
+\end{itemize}
+
+\subsection{必须返回一个object时，别妄想返回其reference}
+\label{sec:Item-21}
+
+一个典型的例子就是重载算术运算符的时候不能返回reference，否则就会传递
+一些references指向并不存在的对象。如果函数内部创建一个指针，就会出现内
+存泄漏， 如果函数内部创建一个local static对象，那(a*b)==(c*d)永远都会
+成立。
+
+因此，\textbf{绝对不要返回pointer或者reference指向一个local stack对象或
+heap-allocated对象}，或者指向一个local static对象而有可能同时需要多个这
+样的对象，Section \ref{sec:Item-4} 已经为“在单线程环境中合理返回
+reference指向一个local static对象”提供了一份设计示例。
+
+\subsection{将成员变量声明为private}
+\label{sec:Item-22}
+
+如果成员变量不是\texttt{public}，客户唯一能够访问对象的办法就是成员函
+数，这样可以保证一致性，另外，这样封装可以为“所有可能的实现”提供弹性，
+例如，你可以随时修改class的实现方式，客户只需要重新编译，遵循Section
+\ref{sec:Item-31}甚至可以不用重新编译。 另外，这也可以使得成员变量被读
+或者被写时轻松告诉其他对象，可以验证class的约束条件以及函数的前提和时
+候状态等等。
+
+即便成员变量是\texttt{protected}，如果将其取消，也会有大量不可预知的代
+码受到破坏，需要重写、重新测试等等，因此，\textbf{从封装的角度，只有两
+  种访问权限：private（提供封装）和其他（不提供封装）。}
+
+\subsection{偏好non-member、non-friend来替换member函数}
+\label{sec:Item-23}
+
+\begin{verbatim}
+class WebBrowser {
+public:
+  ...
+  void clearCache();
+  void clearHistory();
+  void removeCookies();
+  ...
+  void clearEverything(); // calls clearCache, clearHistory,and removeCookies
+};
+void clearBrowser(WebBrowser& wb){
+  wb.clearCache();
+  wb.clearHistory();
+  wb.removeCookies();
+}
+\end{verbatim}
+哪一个\texttt{clearBrowser}更好呢？
+
+面向对象守则要求数据尽可能地被封装，如果某些东西被封装，它就不再可见，
+因此，越多函数可以访问数据，数据的封装性就越低。因此，当二者都可以提供
+相同的机能时，选择non-member做法可以减少编译依赖度，增加class的包裹弹
+性、技能扩充性。
+
+另外一点，一个像\texttt{WebBrowser}这样的class会拥有大量便利函数，某些
+与书签有关，某些与cookie有关等等，通常大多数客户指对其中某些感兴趣，一
+个自然的做法是将它们分别声明于不同的头文件的相同命名空间中，这也是标准
+库的组织方式，我们只需要include所需要的东西即可：
+\begin{verbatim}
+// header “webbrowser.h” — header for class WebBrowser itself 
+// as well as “core” WebBrowser-related functionality
+namespace WebBrowserStuff {
+  class WebBrowser { ... };
+  ... // “core” related functionality
+}
+
+// header “webbrowserbookmarks.h”
+namespace WebBrowserStuff {
+  ... // bookmark-related convenience functions
+} 
+
+// header “webbrowsercookies.h”
+namespace WebBrowserStuff {
+... // cookie-related convenience functions
+}
+\end{verbatim}
+
+\subsection{如果所有参数都需要类型转换，请采用non-member函数}
+\label{sec:Item-24}
+
+考虑如果为\texttt{Rational}类重载算术运算符，如果定义为member函数，
+\begin{verbatim}
+Rational oneEight (1,8);
+Rational result = oneEight * 2; // Correct!
+Rational result = 2 * oneEight; // Error!
+\end{verbatim}
+因为只有被列入参数列表内的参数才可以进行隐式类型转换，所以当需要支持混
+合式算术运算的时候，必须将其列为non-member函数，同时尽可能避免将其声明
+为friend函数。
+
+\textbf{如果你需要为某个函数的所有参数（包括this指针所指的隐藏参数）进
+  行类型转换，这个函数就必须是non-member。}该条款并不完全成立，等牵扯
+到template的时候才完整，见Section \ref{sec:Item-46}。
+
+\subsection{考虑写一个不抛异常的swap函数}
+\label{sec:Item-25}
+
+标准库的\texttt{swap}函数十分典型：
+\begin{verbatim}
+namespace std {
+  template<typename T> // typical implementation of std::swap;
+  void swap(T& a, T& b) // swaps a’s and b’s values
+  {
+    T temp(a);
+    a = b;
+    b = temp;
+  }
+}
+\end{verbatim}
+
+有些时候这样做效率很低，最典型的例子就是一些“以指针指向一个对象，内涵
+真正数据”的那种类型，实际上它们的\texttt{swap}只需要交换指针就可以了。
+
+\begin{verbatim}
+namespace std {
+  template<> 
+  void swap<Widget>(Widget& a, Widget& b){
+    swap(a.pImpl, b.pImpl); // to swap Widgets, swap their pImpl pointers;
+  } // this won’t compile
+}
+\end{verbatim}
+这里试图访问Widget类的private成员，因此无法编译，正确做法是：
+\begin{verbatim}
+class Widget { // same as above, except for the
+public: // addition of the swap mem func
+  ...
+  void swap(Widget& other){
+     using std::swap; // the need for this declaration is explained later in this Item
+     swap(pImpl, other.pImpl); // to swap Widgets, swap their
+  } // pImpl pointers
+  ...
+};
+namespace std {
+  template<> // revised specialization of
+  void swap<Widget>(Widget& a,Widget& b){
+     a.swap(b); // to swap Widgets, call their
+  } // swap member function
+}
+\end{verbatim}
+
+然而当Widget和WidgetImpl都是模板类的时候还是会出现错误，因为模板函数是
+不支持偏特化的，即下面的写法是不合法的：
+\begin{verbatim}
+namespace std {
+template<typename T>
+  void swap<Widget<T> >(Widget<T>& a, Widget<T>& b)
+  { a.swap(b); }
+}
+\end{verbatim}
+然而我们又不能在std namespace里面添加新东西，所以我们应该将特化的
+\texttt{swap}函数和Widget类定义在一起：
+\begin{verbatim}
+namespace WidgetStuff {
+  ... // templatized WidgetImpl, etc.
+  template<typename T> // as before, including the swap
+  class Widget { ... }; // member function
+  ...
+  template<typename T> // non-member swap function;
+  void swap(Widget<T>& a,Widget<T>& b) // not part of the std namespace
+  {
+     a.swap(b);
+  }
+}
+\end{verbatim}
+
+现在，每次调用\texttt{swap}的时候都会找到该专属版本。 最后，如果你调用
+\texttt{swap}，请确定包含一个\texttt{using}声明式，保证
+\texttt{std::swap}可见：
+
+\begin{verbatim}
+template<typename T>
+void doSomething(T& obj1, T& obj2)
+{
+  using std::swap;
+  swap(obj1, obj2); // call the best swap for objects of type T
+  ...
+}
+\end{verbatim}
+
+另外，成员版\texttt{swap}绝不可以抛出异常，因为\texttt{swap}的一个最好
+应用就是帮助class提供强烈的异常安全性保障，Section \ref{sec:Item-29}会
+提供所有细节，而它基于一个假设：成员版的\texttt{swap}绝不抛出异常。
+
+\clearpage
+\section{实现}
+
+\subsection{尽可能延后变量定义式的出现时间}
+\label{sec:Item-26}
+
+只要定义了一个变量，就要承受构造成本和析构成本，有的时候可能会有某个变
+量从未被使用，但仍会耗费成本，例如：
+
+\begin{verbatim}
+std::string encryptPassword(const std::string& password){
+  using namespace std;
+  string encrypted;
+  if (password.length() < MinimumPasswordLength) {
+    throw logic_error("Password is too short");
+  }
+  return encrypted;
+}
+\end{verbatim}
+
+如果有个被丢出，它就真的没被使用，因此最好延后\texttt{encrypted}的定义
+式：
+\begin{verbatim}
+std::string encryptPassword(const std::string& password){
+  using namespace std;
+  if (password.length() < MinimumPasswordLength) {
+    throw logic_error("Password is too short");
+  }
+  string encrypted;
+  return encrypted;
+}
+\end{verbatim}
+但是这还不够紧实，因为\texttt{encrypted}虽然定义但没有初值，调用的是默
+认构造函数，Section \ref{sec:Item-4}解释了为什么通过默认构造函数构造比
+直接构造时指定初值的效率差。
+\begin{verbatim}
+std::string encryptPassword(const std::string& password){
+  string encrypted(password); // define and initialize via copy
+  encrypt(encrypted);
+  return encrypted;
+}
+\end{verbatim}
+因此“尽可能延后”是指尽可能延后到这份定义能够直接给它初值实参为止。如
+果涉及循环的话，最好是放在内部，因为对程序的可理解性和易维护性更好，如
+果追求效率的话就要分析赋值成本和构造析构成本哪个更高。
+
+\subsection{少做转型动作}
+\label{sec:Item-27}
+
+转型共有五种形式：
+\begin{itemize}
+\item \textbf{旧式转型(old-style casts)}：
+\begin{verbatim}
+(T)expression //将expression转型为T
+T(expression)
+\end{verbatim}
+\item \texttt{const\_cast<T>(expression}：通常被用来cast away the
+  constness，它也是唯一由此能力的转型操作符。
+\item \texttt{dynamic\_cast<T>(expression)}：主要用来执行safe
+  downcasting，也是用来决定某对象是否归属集成体系中的某个类型，它是唯
+  一无法用旧式语法执行的动作，也是耗费重大运行成本的动作。
+\item \texttt{reinterpret\_cast<T>(expression)}：意图执行地执行低级转
+  型，实际动作可能取决于编译器，例如将一个pointer to int转型为int，这
+  一类在低级代码之外很少见，本书只在讨论如何针对原始内存(raw memory)写
+  出一个调试用的分配器(debugging allocator)使用，见 Section
+  \ref{sec:Item-50}。
+\item \texttt{static\_cast<T>(expression)}：用来强迫隐式转换，例如将
+  non-const对象转换为const对象，以及上述转换的反向，例如type*转换为
+  void*，pointer-to-derived转为pointer-to-base等等，但是它无法将const
+  转为non-const。
+\end{itemize}
+
+注意，\textbf{任何一种类型转换往往真的令编译器编译出运行期间执行的代码}，
+例如：
+\begin{verbatim}
+class Base { ... };
+class Derived: public Base { ... };
+Derived d;
+Base *pb = &d; // implicitly convert Derived* to Base*
+\end{verbatim}
+这种情况下会有一个偏移量（offset）在运行期被施加于这\texttt{Derived*}
+指针身上来获得正确的\texttt{Base*}指针值，这说明，单一对象可能拥有一个
+以上的地址，因此你应该避免做出“object在C++中如何布局”的假设，例如，
+\textbf{将object地址转型为\texttt{char*}后进行指针算术，这几乎总会导致
+  无定义行为}。
+
+关于转型还有一个有趣的事情：我们很容易写出似是而非的代码，例如
+\begin{verbatim}
+class Window { // base class
+public:
+  virtual void onResize() { ... } // base onResize impl
+  ...
+};
+class SpecialWindow: public Window { // derived class
+public:
+  virtual void onResize() { // derived onResize impl;
+    static_cast<Window>(*this).onResize(); // this doesn’t work!
+    ...
+  }
+  ...
+};
+\end{verbatim}
+此时它是在\textbf{当前对象的base class成分的副本}上调用
+\texttt{Window::onResize}，然后再在当前对象身上执行
+\texttt{SpecialWindow}专属动作， 如果两个\texttt{onResize}修改了对
+象内容，那么base class成分并没有更改，但derived class成分却更改了。解
+决的办法就是：
+
+\begin{verbatim}
+class SpecialWindow: public Window {
+public:
+  virtual void onResize() {
+    Window::onResize(); // call Window::onResize on *this
+    ...
+  }
+  ...
+};
+\end{verbatim}
+
+因此，如果你发现自己打算类别转换，这就是一个警告信号：你可能正在把局面
+发展到错误的方向上，如果你用的是\texttt{dynamic\_cast}更是如此。
+
+首先，\texttt{dynamic\_cast}执行速度相当慢，例如至少会进行多次的
+\texttt{strcmp}调用来比较class名称。之所以需要\texttt{dynamic\_cast}通
+常是因为你想执行derived class操作函数，但手上只有一个指向base的pointer
+或者reference，有两个一般性做法可以避免这个问题：
+
+\begin{itemize}
+\item 使用容器并在其中存储直接指向derived class对象的指针（通常是智能
+  指针），当然这种做法使你无法在同一个容器内存储指针指向所有可能的派生
+  类，因此就需要多个容器。
+\item 另一个做法就是在base class内提供virtual函数做你想对各个派生类做
+  的事情。
+\end{itemize}
+
+\subsection{避免返回“handles”指向对象内部成分}
+\label{sec:Item-28}
+
+\begin{verbatim}
+class Rectangle {
+public:
+  ...
+  Point& upperLeft() const { return pData->ulhc; }
+  Point& lowerRight() const { return pData->lrhc; }
+  ...
+};
+\end{verbatim}
+
+这两个函数被声明为const成员函数，是不想让客户修改的，但却又返回
+reference指向private内部数据。这告诉我们两点：\textbf{成员变量的封装性
+  最多只等于“返回其reference”的函数的访问级别}。
+
+如果返回的是指针或者迭代器，情况是相同的，这些我们统称为
+\textbf{handles}，返回一个“代表对象内部数据”的handle就会带来降低封装
+性的风险。因此需要将函数加上\texttt{const}。
+\begin{verbatim}
+class Rectangle {
+public:
+  ...
+  const Point& upperLeft() const { return pData->ulhc; }
+  const Point& lowerRight() const { return pData->lrhc; }
+  ...
+};
+\end{verbatim}
+
+但有时候还会存在问题，更明确地说，\textbf{它可能导致dangling handles}，
+比如如果返回一个指针，可能就会不小心析构了。
+
+但这不以为绝对不可以让成员函数返回handle，有时候必须这么做，例如，
+\texttt{operter[]}就是返回references指向容器内的数据。
+
+\subsection{为异常安全而努力是值得的}
+\label{sec:Item-29}
+
+假设有个class用来表现夹带背景图案的GUI菜单，这个calss希望用于多线程，
+所以有互斥器\texttt{mutex}作为并发控制用：
+\begin{verbatim}
+class PrettyMenu {
+public:
+  void changeBackground(std::istream& imgSrc); // change background image
+private:
+  Mutex mutex; // mutex for this object
+  Image *bgImage; // current background image
+  int imageChanges; // # of times image has been changed
+};
+\end{verbatim}
+下面是\texttt{changeBackground}函数的一个可能实现:
+\begin{verbatim}
+void PrettyMenu::changeBackground(std::istream& imgSrc)
+{
+  lock(&mutex); // acquire mutex (as in Item 14)
+  delete bgImage; // get rid of old background
+  ++imageChanges; // update image change count
+  bgImage = new Image(imgSrc); // install new background
+  unlock(&mutex); // release mutex
+}
+\end{verbatim}
+从异常安全性的观点来看，这个函数很糟糕，因为它没有满足异常安全的两个条
+件：即当异常被抛出时，带有异常安全性的函数会:
+\begin{itemize}
+\item \textbf{不泄露任何资源。}上述代码一旦\texttt{new}出现异常，unlock就不会执行，互斥器就
+  永远被hold住了。
+\item \textbf{不允许数据败坏（corrupted）。}如果\texttt{new}出现异常，
+  \texttt{bgImage}就会指向一个已被删除的对象，\texttt{imageChanges}也
+  被累加，但新图像并没有成功安装。
+\end{itemize}
+
+解决资源泄露很容易，可以看Section \ref{sec:Item-13},\ref{sec:Item-14}。
+
+在专注解决数据败坏之前，先定义一些术语：
+异常安全函数（Exception-safe functions）提供以下三个保证之一：
+\begin{itemize}
+\item \textbf{基本承诺：}如果异常被抛出，程序内任何事物仍然保持在有效
+  状态，所有对象都处于内部前后一致的状态。举个例子，如果有异常抛出，
+  \texttt{PrettyMenu}对象可以继续拥有原背景图像或者拥有一个默认图像。
+\item \textbf{强烈保证：}如果异常被抛出，程序状态不改变，即如果函数失
+  败，程序会回复到“调用函数之前”的状态。和这样的函数共事是最容易的。
+\item \textbf{不抛掷（nothrow）保证：}承诺不抛出异常，因为它们总是能够
+  完成承诺的功能。作用于内置类型（int，指针等等）的所有操作都提供
+  nothrow保证。
+\begin{verbatim}
+int doSomething() noexcept;
+int doSomething() throw();
+\end{verbatim}
+这并不是说\texttt{doSomething}绝对不会抛出异常，而是说抛出异常是严重的
+错误。
+\end{itemize}
+
+因此，我们目前的抉择是，我们该为我们所写的函数提供哪一种保证？从异常安
+全性的观点看来，\texttt{nothrow}函数很棒，但是大部分函数而言，抉择往往
+在基本保证和强烈保证之间。
+
+对于\texttt{changebackground}而言，提供强烈保证不困难：不仅将
+\texttt{Image*}改为智能指针，还重新排列了一下语句次序，在更换图像之后
+才累加\texttt{imageChanges}。
+\begin{verbatim}
+class PrettyMenu {
+  ...
+  std::tr1::shared_ptr<Image> bgImage;
+  ...
+};
+void PrettyMenu::changeBackground(std::istream& imgSrc){
+  Lock ml(&mutex);
+  bgImage.reset(new Image(imgSrc));
+  ++imageChanges;
+}
+\end{verbatim}
+
+另外，还有一个一般化的设计策略可以做到强烈保证：\textbf{copy and swap}
+： 
+为你打算修改的object做出一个副本，然后在副本上修改，如果有任何动作抛出
+异常，原object则保持不变。待所有改变成功后，再将副本与原object进行swap
+。 实现上通常是将所有“隶属对象的数据”从原object放进另一个对象内，然
+后赋予原object一个指针指向哪个所谓的实现对象（implementation object，
+即副本），这种手法通常被叫做\textbf{pimpl idiom}，可见Section
+\ref{sec:Item-31}。对\texttt{PrettyMenu}而言，写法如下：
+\begin{verbatim}
+struct PMImpl { 
+  std::tr1::shared_ptr<Image> bgImage;
+  int imageChanges; 
+};
+class PrettyMenu {
+private:
+  Mutex mutex;
+  std::tr1::shared_ptr<PMImpl> pImpl;
+};
+void PrettyMenu::changeBackground(std::istream& imgSrc){
+  using std::swap; // see Item 25
+  Lock ml(&mutex); // acquire the mutex
+  std::tr1::shared_ptr<PMImpl> pNew(new PMImpl(*pImpl));
+  pNew->bgImage.reset(new Image(imgSrc)); // modify the copy
+  ++pNew->imageChanges;
+  swap(pImpl, pNew); // swap the new data into place
+} // release the mutex
+\end{verbatim}
+
+但是并非所有函数都能够这样来实现“强烈保证”。另外，它并不能保证整个函
+数是有强烈的异常安全性的：
+\begin{verbatim}
+void someFunc()
+{
+  f1();
+  f2();
+}
+\end{verbatim}
+只要其中一个无法提供异常安全保证，整体就无法提供异常安全保证。
+\textbf{函数提供的“异常安全保证”通常最高值等于各个函数的“异常安全保
+  证”中的最弱者。}
+
+\subsection{透彻理解inline的里里外外}
+\label{sec:Item-30}
+
+\texttt{inline}的好处有：
+\begin{itemize}
+\item 减少了函数调用所导致的额外开销。
+\item 编译器最优化机制被设计用来浓缩那些“不含函数调用”的代码，因此编
+  译器用能力对inline函数本体执行语境相关最优化。
+\item 如果对各种函数都用\texttt{inline}的话，目标代码（object code）会
+  增加，可能会导致额外的换页行为（paging），降低指令高速缓存装置的击中
+  率（instruction cache hit rate）以及伴随而来的效率。 反过来讲，如果
+  inline函数本体很小，那么编译器产出的object code可能会更小，就会更好
+  的效率。
+\end{itemize}
+
+\texttt{inline}只是对编译器的申请，也可以隐式提出，隐式方式就是将函数
+定义在class定义中，friend函数同样适用。
+\begin{verbatim}
+class Person {
+public:
+  ...
+  int age() const { return theAge; }
+private:
+  int theAge;
+};
+
+template<typename T> // an explicit inline
+inline const T& std::max(const T& a, const T& b)
+{ return a < b ? b : a; } 
+\end{verbatim}
+
+template和inline函数都要放在头文件中，因为编译器要将其具现化或者替换函
+数调用的时候必须知道函数长什么样子。同时，\textbf{编译器拒绝将太复杂的
+  函数inlining（例如带有循环和递归），对于所有virtual函数的调用也都会
+  拒绝inlining。} 幸运的是：如果编译器无法inline，会给你一个警告信息
+（见Section \ref{sec:Item-53}）。
+
+还有些时候编译器虽有意愿inline某个函数，但也还可能会为该函数生成一个函
+数本体：
+\begin{itemize}
+\item 如果程序要取某个inline函数的地址，编译器就必须为此函数生成一个函
+  数本体，编译器通常不对通过函数指针调用的inline函数实施inlining。即
+  inline函数的调用有可能被inlined，也可能不被inlined。
+\item 有时候编译器会生成构造函数和析构函数的outline副本，这样它们就可
+  以获得函数指针用在array内部元素的构造和析构过程中。
+\end{itemize}
+
+然而，声明inline也是有成本的：
+\begin{itemize}
+\item 首先是代码膨胀。
+\item 其次，\textbf{析构函数和构造函数往往是inline的糟糕候选
+  人}，虽然表面上构造函数是空的或者很少，实际上所有对象都要初始化以及
+异常处理都是构造函数要提供的行为，如果是继承类的构造函数inline，那么基
+类的构造函数代码也会被插入进来。
+\item 另外，inline函数无法随着程序库的升级而升级：假设f是一个inline函
+  数，如果f改变了，所有涉及到f的程序都需要重新编译。如果f不是inline函
+  数，程序只需要重新链接就好。
+\item 最后，大部分调试器对inline函数都束手无策，因为无法对并不存在的函
+  数设立断点。
+\end{itemize}
+
+\subsection{将文件间的编译依存关系降到最低}
+\label{sec:Item-31}
+\begin{verbatim}
+class Person {
+public:
+  Person(const std::string& name, const Date& birthday, const Address& addr);
+  std::string name() const;
+  std::string birthDate() const;
+  std::string address() const;
+  ...
+private:
+  std::string theName; // implementation detail
+  Date theBirthDate; // implementation detail
+  Address theAddress; // implementation detail
+};
+\end{verbatim}
+一旦某个类型发生改变，所有含\texttt{Person}的文件都要重新编译。 我们可
+以采用\textbf{pimpl idiom (pointer to implementation)}的设计：
+\begin{verbatim}
+class PersonImpl; // forward decl of Person impl. class
+class Date; // forward decls of classes used in
+class Address; // Person interface
+class Person {
+public:
+  Person(const std::string& name, const Date& birthday, const Address& addr);
+  std::string name() const;
+  std::string birthDate() const;
+  std::string address() const;
+  ...
+private:
+  shared_ptr<PersonImpl> pImpl;
+};
+\end{verbatim}
+在这样的设计下，\texttt{Person}的客户就完全与其他类的实现细节相分离了。
+这个分离的关键在于以“声明的依存性”替换“定义的依存性”，那正是编译依
+存性最小化的本质：\textbf{让头文件尽可能自我满足，万一做不到，则让它与
+  其他文件内的声明式（而非定义式）相依}。其他每一件事都源自于这个简单
+的设计策略：
+\begin{itemize}
+\item 如果使用object reference或者pointer就可以完成任务，就不要使用
+  object。
+\item 尽量以class声明式替换class定义式：当你声明一个函数而它要用到某个
+  class时，并不需要该class的定义，加一个前置class声明就可以。
+\begin{verbatim}
+class Date;
+Date today();
+void clearAppointments(Date d); //不需要Date的定义式
+\end{verbatim}
+\item 为声明式和定义式提供不同的头文件。
+\end{itemize}
+
+像上面的pimpl idiom的classes经常被称为\textbf{Handle classes}，另一个
+制作Handle class的方法是令\texttt{Person}成为一种特殊的抽象基类，称为
+\textbf{Interface class}。
+\begin{verbatim}
+class Person {
+public:
+  virtual ~Person();
+  virtual std::string name() const = 0;
+  virtual std::string birthDate() const = 0;
+  virtual std::string address() const = 0;
+  static shared_ptr<Person> create(const std::string& name, const Date& birthday, const Address& addr); 
+  ...
+};
+
+class RealPerson: public Person {
+public:
+  RealPerson(const std::string& name, const Date& birthday, const Address& addr)
+  : theName(name), theBirthDate(birthday), theAddress(addr){}
+  virtual ~RealPerson() {}
+  std::string name() const; // implementations of these
+  std::string birthDate() const; // functions are not shown, but
+  std::string address() const; // they are easy to imagine
+private:
+  std::string theName;
+  Date theBirthDate;
+  Address theAddress;
+};
+
+shared_ptr<Person> Person::create(const std::string& name, const Date&birthday, const Address& addr)
+{
+  return shared_ptr<Person>(new RealPerson(name, birthday,addr));
+}
+\end{verbatim}
+
+当然，它们也都是有成本代价的，handle classes会增加内存大小，会为每一次
+访问增加一层间接性，也要承受初始化，释放的额外开销和异常可能。
+
+Interface classes每个函数都是\texttt{virtual}，所以每次函数调用都要付
+出一个间接跳跃（indirect jump）成本（见Section \ref{sec:Item-7}），另
+外也要承担vptr带来的额外内存。
+
+最后，\textbf{Handle classes和Interface classes脱离inline函数就没有什
+  么作为}，因为只有inline函数本体才必须要置于头文件内部，它们正是特别
+被设计用来隐藏实现细节的。当它们导致速度或大小差异过于重大以至于class
+之间的耦合并不成为关键时，我们就用具象类（concrete class）替换handle
+class和interface class。
 \input{Appendix}
-
-
 \end{document}
 %%% Local Variables:
 %%% mode: latex
