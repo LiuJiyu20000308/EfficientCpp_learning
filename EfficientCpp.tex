@@ -1704,6 +1704,220 @@ Interface classes每个函数都是\texttt{virtual}，所以每次函数调用�
 被设计用来隐藏实现细节的。当它们导致速度或大小差异过于重大以至于class
 之间的耦合并不成为关键时，我们就用具象类（concrete class）替换handle
 class和interface class。
+
+\clearpage
+\section{继承与面向对象设计}
+
+\subsection{确定你的public继承塑模出is-a关系}
+\label{sec:Item-32}
+
+\texttt{public}继承意味着is-a关系，适用于base classes身上的每一件事情
+一定也适用于derived class身上。例如:企鹅是不会飞的鸟，但大部分鸟会飞。
+这样三层继承关系比较合适：
+\begin{verbatim}
+class Bird {
+  ... // no fly function is declared
+};
+class FlyingBird: public Bird {
+public:
+  virtual void fly();
+  ...
+};
+class Penguin: public Bird {
+  ... // no fly function is declared
+};
+\end{verbatim}
+
+当然，也有一种处理方式是为企鹅定义fly函数，令它产生一个运行期错误：
+\begin{verbatim}
+class Penguin: public Bird {
+public:
+  virtual void fly() { error("Attempt to make a penguin fly!"); }
+  ...
+};
+\end{verbatim}
+
+Section \ref{sec:Item-18}说过：\textbf{好的接口可以防止无效的代码通过
+  编译}，所以第一种是更好的选择。
+
+\subsection{避免遮掩（hide）继承而来的姓名}
+\label{sec:Item-33}
+
+关于name hiding看Section \ref{sec:Overload}。
+
+有时候你并不想继承base class的所有函数，在public继承下是绝对不可能的，
+但是在private继承下是可以的：
+\begin{verbatim}
+class Base {
+public:
+  virtual void mf1();
+  virtual void mf1(int);
+  ... // as before
+};
+class Derived: private Base {
+public:
+  virtual void mf1(){ Base::mf1(); } 
+};
+...
+Derived d;
+int x;
+d.mf1(); // fine, calls Derived::mf1
+d.mf1(x); // error! Base::mf1() is hidden
+\end{verbatim}
+这里无法用using，因为它会令所有基类同名函数在继承类中都可见。我们将其
+称之为\textbf{inline转交函数（forwarding function）}。
+
+假如继承结合template，就将面对“继承名称被遮掩”的一个全然不同的形式，
+到时候再讲，可见Section \ref{sec:Item-43}。
+
+\subsection{区分接口继承和实现继承}
+\label{sec:Item-34}
+
+看下面这个例子：
+\begin{verbatim}
+class Shape {
+public:
+  virtual void draw() const = 0;
+  virtual void error(const std::string& msg);
+  int objectID() const;
+  ...
+};
+class Rectangle: public Shape { ... };
+class Ellipse: public Shape { ... };
+\end{verbatim}
+
+将函数定义为pure virtual函数，impure virtual函数，non-virtual函数分别
+对应着你想要derived class继承的东西：
+\begin{itemize}
+\item 只继承接口，每一个shape继承类都有其独自的draw实现。
+\item 继承接口和一份缺省实现，每一个继承类可以重写，但如果不重写，也可
+  以使用基类的实现。
+\item 继承接口和一份强制实现，每一个继承类都不应该修改该实现。
+\end{itemize}
+
+这里有一个小tip注意一下：pure virtual函数也是可以定义的，继承类可以用
+\texttt{Base::virtualFunction()}来调用。
+
+这样可以避免经验不足的class设计者常犯的两个错误：
+\begin{itemize}
+\item 将所有函数声明为non-virtual，这使得继承类无法进行特化，析构函数
+  也会带来问题。
+\item 将所有成员函数都声明为virtual，有时候这样是对的，例如interface
+  class，但是这也可能是设计者缺乏坚定立场的前兆。某些函数就是不该在继
+  承类中重新被定义，就应该将它声明为non-virtual。
+\end{itemize}
+
+
+\subsection{考虑virtual函数以外的其他选择}
+\label{sec:Item-35}
+
+\begin{verbatim}
+class GameCharacter {
+public:
+  virtual int healthValue() const;
+};
+\end{verbatim}
+
+还有两种设计可以替代这种virtual函数：
+\begin{itemize}
+\item \textbf{借助non-virtual interface（NVI）}来实现\textbf{template method}
+  模式：
+\begin{verbatim}
+class GameCharacter {
+public:
+  int healthValue() const{ // derived classes do not redefine
+    ... // do “before” stuff — see below
+    int retVal = doHealthValue(); // do the real work
+    ... // do “after” stuff — see below
+    return retVal;
+}
+private:
+  virtual int doHealthValue() const{ // derived classes may redefine this
+    ... // default algorithm for calculating character’s health
+  }
+};
+\end{verbatim}
+  我们把这个non-virtual函数称为virtual函数的外包装（wrapper）。这种设
+  计的优缺点在于：
+  \begin{itemize}
+  \item 可以在wrapper之前和之后做一些事情，例如验证函数的先决条件和事
+    后条件等等，如果让客户直接调用virtual函数就没有办法做到这个事情。
+  \item 但是NVI设计涉及在继承类内重新定义若干个继承类并不会调用的
+    virtual函数。
+  \item 在NVI手法下并不一定需要virtual函数是private的，假如继承类也需
+    要调用基类函数，就必须是protected。有时候virtual函数甚至一定得是
+    public，例如析构函数，这样就不能实施NVI手法了。
+  \end{itemize}
+  
+\item 第二个是\textbf{藉由Function Pointers实现Strategy模式}。
+\begin{verbatim}
+class GameCharacter; // forward declaration
+// function for the default health calculation algorithm
+int defaultHealthCalc(const GameCharacter& gc);
+class GameCharacter {
+public:
+  typedef int (*HealthCalcFunc)(const GameCharacter&);
+  explicit GameCharacter(HealthCalcFunc hcf = defaultHealthCalc): healthFunc(hcf){}
+  int healthValue() const
+  { return healthFunc(*this); }
+  ...
+private:
+  HealthCalcFunc healthFunc;
+};
+\end{verbatim}
+  这种设计模式提供了某些有趣弹性：
+  \begin{itemize}
+  \item 同一类型的不同实体可以有不同的健康计算函数。
+  \item 某一直任务的健康计算函数可以在运行期变更，即这些计算函数并未访
+    问对象的non-public成分。如果计算需要用到non-public成分，就需要弱化
+    class的封装，例如声明friend或者提供一些public访问函数等。 
+  \end{itemize}
+
+\item 还可以藉由\texttt{function}完成\textbf{strategy模式}：
+\begin{verbatim}
+class GameCharacter; // as before
+int defaultHealthCalc(const GameCharacter& gc); // as before
+class GameCharacter {
+public:
+  typedef std::function<int (const GameCharacter&)> HealthCalcFunc;
+  explicit GameCharacter(HealthCalcFunc hcf = defaultHealthCalc):healthFunc(hcf){}
+  int healthValue() const
+  { return healthFunc(*this); }
+  ...
+private:
+  HealthCalcFunc healthFunc;
+};
+\end{verbatim}
+  \texttt{std::function}使得“健康计算函数”具有更大的弹性：
+\begin{verbatim}
+short calcHealth(const GameCharacter&); //non-int return type
+struct HealthCalculator { // class for health
+  int operator()(const GameCharacter&) const // calculation function objects
+  { ... }
+};
+class GameLevel {
+public:
+  float health(const GameCharacter&) const;
+}; 
+class EvilBadGuy: public GameCharacter { // as before
+  ...
+};
+GameLevel currentLevel;
+EvilBadGuy ebg(std::bind(&GameLevel::health,currentLevel,_1));
+\end{verbatim}
+  \texttt{GameLevel::health}实际上有两个参数，有一个隐式参数
+  \texttt{*this}，如果我们将它作为a将抗击孙函数，就必须用某种方式转换
+  它，使它不再接受两个参数，于是我们将\texttt{currentLevel}作为第一个
+  参数输入，这个就是\texttt{std::bind}做的事情。
+\item 最后一点就是可以将集成体系内的virtual函数替换为另一个集成体系内
+  的virtual函数，比如，关于健康计算可以创建一个继承体系，人物部分再用
+  \texttt{std::function}实现strategy模式即可。
+\end{itemize}
+
+\subsection{绝不重新定义继承而来的non-virtual函数}
+\label{sec:Item-36}
+
+
 \input{Appendix}
 \end{document}
 %%% Local Variables:

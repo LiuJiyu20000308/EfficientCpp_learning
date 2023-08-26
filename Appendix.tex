@@ -78,12 +78,100 @@ struct Boo{
 
 \subsection{万能引用}
 
+\subsection{std::function}
+\label{sec:function}
+
+
+\subsection{std::bind}
+\label{sec:bind}
+
+ 
+
+\subsection{重载、重写、重定义}
+\label{sec:Overload}
+\begin{itemize}
+\item \textbf{重载}（overload）：函数名相同，函数的参数个数、参数类型
+  或参数顺序三者中必须至少有一种不同。函数返回值的类型可以相同，也可以
+  不相同。发生在一个类内部。 \texttt{const}关键字可以用于对重载函数的
+  区分。 
+\item \textbf{重定义}：也叫做隐藏，子类重新定义父类中有相同名称的非虚
+  函数 ( 参数列表可以不同 ) ，指派生类的函数屏蔽了与其同名的基类函数。
+  发生在继承中。 
+\item \textbf{重写}（override）：也叫做覆盖，一般发生在子类和父类继承
+  关系之间。子类重新定义父类中有相同名称和参数的虚函数。
+\end{itemize}
+
+重写需要注意：
+\begin{itemize}
+\item 被重写的函数不能是static的。必须是virtual的
+\item 重写函数必须有相同的类型，名称和参数列表
+\item 重写函数的访问修饰符可以不同。尽管virtual是private的，派生类中重
+  写改写为public,protected也是可以的。
+\end{itemize}
+
+重定义规则如下：
+\begin{itemize}
+\item 如果派生类的函数和基类的函数同名，但是参数不同，此时，不管有无
+  virtual，基类的函数被隐藏。
+\item 如果派生类的函数与基类的函数同名，并且参数也相同，但是基类函数没
+  有vitual关键字，此时，基类的函数被隐藏（如果相同有virtual就是重写覆
+  盖了）。 
+\end{itemize}
+
+重定义存在的意义是避免基类修改某些实现导致继承类正常运行的代码出现异常
+行为。
+
+但是如果upcast，即用基类指针指向继承类object，就只能调用基类的函数。
+
+如果想继续使用基类的函数，需要在继承类中加入 \texttt{using Base::f}。
+\begin{verbatim}
+class Base {
+public:
+  virtual int f() const {}
+  virtual void f(string) const {}
+  virtual void g() const {}
+};
+
+class Derived2 : public Base {
+public:
+  // Overriding a virtual function:
+  // string version has been hidden!
+  int f() const {
+    cout << "Derived2::f()\n";
+    return 2;
+  }
+};
+
+class Derived3 : public Base {
+public:
+  // Cannot change return type:
+  //void f() const{ cout << "Derived3::f()\n";}
+};
+
+class Derived4 : public Base {
+public:
+  // Change argument list:
+  // two base::f have been hidden
+  int f(int) const {
+    cout << "Derived4::f()\n";
+    return 4;
+  }
+};
+
+Derived4 d4;
+x = d4.f() // error!
+Base *base = new Derived4;
+base -> f(1) // error! Derived version is unavailable.
+br -> f();
+br -> f("string"); // Base version available.
+\end{verbatim}
 
 \subsection{零碎知识点}
 
 \begin{itemize}
 \item 普通左值引用无法指向右值，但常量左值引用可以指向右值，常用于拷贝
   构造函数。
+\item 
 \end{itemize}
 %%% Local Variables:
 %%% mode: latex
