@@ -1916,6 +1916,1068 @@ EvilBadGuy ebg(std::bind(&GameLevel::health,currentLevel,_1));
 
 \subsection{绝不重新定义继承而来的non-virtual函数}
 \label{sec:Item-36}
+\begin{verbatim}
+class B {
+public:
+  void mf();
+};
+class D: public B {
+public:
+  void mf(); // hides B::mf; see Item 33
+};
+
+D x;
+B *pB = &x;
+D *pD = &x;
+pB->mf(); // calls B::mf
+pD->mf(); // calls D::mf
+\end{verbatim}
+
+\subsection{绝不重新定义继承而来的缺省参数值}
+\label{sec:Item-37}
+
+\textbf{virtual函数是动态绑定，但是缺省参数值却是静态绑定}：
+\begin{verbatim}
+class Shape {
+public:
+  enum ShapeColor { Red, Green, Blue };
+  virtual void draw(ShapeColor color = Red) const = 0;
+};
+class Rectangle: public Shape {
+public:
+// notice the different default parameter value — bad!
+virtual void draw(ShapeColor color = Green) const;
+...
+};
+class Circle: public Shape {
+public:
+virtual void draw(ShapeColor color) const;
+...
+};
+
+Circle *pc = new Circle; 
+Shape *pr = new Rectangle;
+pc->draw(); // Error! No default parameter!
+pr->draw(); // calls Rectangle::draw(Shape::Red)!
+\end{verbatim}
+\textbf{虽然pr执行的是Rectangle的draw，但是缺省参数值却是来自Shape
+  class的。}这是编译器为了保证运行期效率所采用的行为。
+
+但是我们真的要每一个继承类都要重新写一下相同的缺省参数值，类似下面这种
+的吗？
+\begin{verbatim}
+class Rectangle: public Shape {
+public:
+  virtual void draw(ShapeColor color = Red) const;
+};
+\end{verbatim}
+这样会代码重复，并且又有相依性，一旦基类缺省值作了修改，所有继承类都要
+修改。一种替代设计就是Section \ref{sec:Item-35}讲到的NVI手法：令base
+class内的一个public non-virtual函数调用private virtual函数，后者可被
+derived class重新定义。
+\begin{verbatim}
+class Shape {
+public:
+  enum ShapeColor { Red, Green, Blue };
+  void draw(ShapeColor color = Red) const{
+    doDraw(color); // calls a virtual
+  }
+private:
+  virtual void doDraw(ShapeColor color) const = 0; 
+};
+class Rectangle: public Shape {
+public:
+  ...
+private:
+  virtual void doDraw(ShapeColor color) const;
+};
+\end{verbatim}
+
+\subsection{通过composition塑模出has-a关系或者“根据某物实现出”关系}
+\label{sec:Item-38}
+
+composition指的是某种类型的对象内含有其他类型的对象，同义词还有
+layering, containment, aggregation, embedding。
+
+程序中的对象相当于你塑造的某种事物，这属于应用域（application domain）
+部分，还有一些对象则是纯粹实现细节上的人工制品，例如缓冲区buffers，互
+斥器mutexes，查找树search trees等等，这些相当于实现域（implementation
+domain），当复合发生在这两个区域内，就表现出has-a或者
+is-implemented-in-terms-of关系。
+\textbf{has-a和is-a很好区分，但是is-a和is-implemented-in-terms-of比较
+  麻烦。}
+例如，当你想利用list实现一个set，这就不能用继承关系，而是要用复合。
+
+
+\subsection{明智而审慎使用private继承}
+\label{sec:Item-39}
+
+private继承实际上意味着implemented-in-terms-of。D以private形式继承B，
+意味着D对象是根据B对象实现而得，并没有其他意义了。
+
+Section~\ref{sec:Item-38}提到compo sition也有同样的意义，那么怎么做取舍
+呢？答案很简单：\textbf{尽可能使用复合，必要时才使用private继承，主要
+  是当protected成员或者virtual函数牵扯进来的时候，还有一种激进情况是空
+  间方面的利害关系。}
+
+假设我们的程序涉及\texttt{Widgets}，我们需要涉及某种定时器来收集它的数
+据，此时我们有工具：
+\begin{verbatim}
+class Timer {
+public:
+  explicit Timer(int tickFrequency);
+  virtual void onTick() const; // automatically called for each tick
+};
+\end{verbatim}
+
+此时我们有两种设计：
+\begin{itemize}
+\item \textbf{private继承：}
+\begin{verbatim}
+class Widget: private Timer {
+private:
+  virtual void onTick() const; // look at Widget usage data, etc.
+};
+\end{verbatim}
+\item \textbf{public继承+复合：}
+\begin{verbatim}
+class Widget {
+private:
+  class WidgetTimer: public Timer {
+  public:
+    virtual void onTick() const;
+  };
+  WidgetTimer timer;
+  ...
+};
+\end{verbatim}
+\end{itemize}
+
+第二种设计是更好的，原因在于：
+\begin{itemize}
+\item 首先，你之后可能会想设计\texttt{Widget}使它得以拥有继承类，同时
+  你可能会想阻止继承类重新定义\texttt{onTick}，这种想法只有第二种设计
+  可以做到。
+\item 你可能会想将Widget的编译依存性降低，那么我们就可以把WidgetTimer
+  移出Widget之外，Widget内含一个WidgetTimer指针即可，这样Widget就不再
+  需要include任何与Timer有关的东西。
+\end{itemize}
+
+之前提到的激进情况针对于空白类，即内部没有任何数据，包括non-static成员，
+virtual函数，也没有virtual base class：
+\begin{verbatim}
+class Empty {};
+class HoldAnInt {
+private:
+  int x;
+  Empty e;
+};
+sizeof(HoldsAnInt) > sizeof(int) !!!
+\end{verbatim}
+你会发现很神奇的事情是，\texttt{HoldsAnInt}的size会大于一个int，因为
+\texttt{size(Empty)=1}，有时候编译器为了齐位，\texttt{size(Empty)}可能
+等于\texttt{size(int)}。
+
+但是如果我们继承Empty：
+\begin{verbatim}
+class HoldsAnInt: private Empty {
+private:
+  int x;
+};
+\end{verbatim}
+可以发现\texttt{sizeof(HoldsAnInt)==sizeof(int)}，这就是空白基类最优化
+（EBO，empty base optimization）。
+
+现实中的empty class并不一定是empty，它们可能包含typedefs，enums，
+static成员变量或者non-virtual函数。STL中就有许多技术用途的empty class，
+EBO使得这样的继承很少增加继承类的大小。
+
+\subsection{明智而审慎使用多重继承}
+\label{sec:Item-40}
+
+最先要认清的一件事是程序有可能会从多个base class里继承相同名称，从而导
+致歧义（ambiguity）：
+\begin{verbatim}
+class BorrowableItem { 
+public:
+  void checkOut(); // check the item out from the library
+};
+class ElectronicGadget {
+private:
+  bool checkOut() const;
+};
+class MP3Player: public BorrowableItem, public ElectronicGadget{ ... }; 
+MP3Player mp;
+mp.checkOut(); // ambiguous!
+mp.BorrowableItem::checkOut();
+\end{verbatim}
+
+多重继承中最要命的是钻石型多重继承：
+\begin{verbatim}
+class File { ... };
+class InputFile: public File { ... };
+class OutputFile: public File { ... };
+class IOFile: public InputFile, public OutputFile{ ... };
+\end{verbatim}
+这时候有一个问题：base class内的成员变量是否要经由每一条路径复制？从一
+个角度说，对于File中的变量fileName，IOFile应该有两份fileName成员变量，
+但另一个角度说，IOFile对象只该有一个文件名称。\textbf{C++默认第一种，
+  如果想要第二种，只需要让InputFile和OutputFile进行virtual继承即可。}
+
+从正确行为观点看，public继承应该总是virtual的，但是virtual继承需要付出
+很多代价：
+\begin{itemize}
+\item virtual继承的那些class所产生的对象往往比non-virtual的大。
+\item 初始化规则复杂且不直观：virtual base初始化责任是由most derived
+  class负责的。
+\end{itemize}
+但是还是非必要不使用virtual base，如果使用就尽可能避免在base class中防
+放置数据。
+
+\clearpage
+\section{模板与泛型编程}
+
+\subsection{了解隐式接口和编译期多态}
+\label{sec:Item-41}
+
+前面讲的都是显式接口（explicit interface）和运行期多态（runtime
+polymorphism），即virtual函数。 但是template而言是隐式接口和编译期多态
+。这类似于“哪一个重载函数该被调用（编译期发生）”和“哪一个virtual函
+数该被绑定（运行期发生）”的差异。
+
+\subsection{了解typename的双重意义}
+\label{sec:Item-42}
+
+在template声明式中class和typename没有不同。但有一些情况必须要用
+typename。
+
+\begin{verbatim}
+template<typename C> // print 2nd element in
+void print2nd(const C& container){ // this is not valid C++!
+  if (container.size() >= 2) {
+    C::const_iterator iter(container.begin());
+    ++iter;
+    int value = *iter;
+    std::cout << value;
+  }
+}
+\end{verbatim}
+
+template内出现依赖于某个template参数，称之为\textbf{从属名
+  称}（dependent names），反之为\textbf{非从属名称（non-dependent
+  names）}。如果从属名称在class内呈嵌套状，则称作
+\textbf{嵌套（nest）从属名称}，\texttt{C::const\_iterator}就是这种名称。
+
+嵌套从属名称可能会导致解析（parsing）困难：如果C有个static成员变量而碰
+巧命名为\texttt{const\_iterator}呢？那么，想要告诉编译器这是一个类型的
+话，就必须在他之前加上关键字\texttt{typename}。
+
+一般性规则很简单：任何时候你想在template中指涉一个嵌套从属类型名称，就
+必须加上关键字\texttt{typename}，例如：
+\begin{verbatim}
+template<typename C> // typename allowed (as is “class”)
+void f(const C& container, // typename not allowed
+typename C::iterator iter); // typename require
+\end{verbatim}
+
+但该规则的一个例外是：\texttt{typename}不可以出现在base class list内的
+嵌套从属类型名称之前，也不可以在member initialization list中作为base
+class的修饰符，例如：
+\begin{verbatim}
+template<typename T>
+class Derived: public Base<T>::Nested { // base class list: typename not allowed
+public: 
+  explicit Derived(int x) : Base<T>::Nested(x) // base classidentifier in mem. init. list: typename not allowed
+  {
+    typename Base<T>::Nested temp; // use of nested dependent type
+  }
+};
+\end{verbatim}
+
+最后再看一个\texttt{typename}的例子：
+\begin{verbatim}
+template<typename IterT>
+void workWithIterator(IterT iter){
+  typename std::iterator_traits<IterT>::value_type temp(*iter);
+  ...
+}
+\end{verbatim}
+
+\subsection{学习处理模板化基类内的名称}
+\label{sec:Item-43}
+
+\begin{verbatim}
+class CompanyA {
+public:
+  ...
+  void sendCleartext(const std::string& msg);
+  void sendEncrypted(const std::string& msg);
+  ...
+};
+
+template<typename Company>
+class MsgSender {
+public:
+  ... // ctors, dtor, etc.
+  void sendClear(const MsgInfo& info){
+    std::string msg;
+    create msg from info;
+    Company c;
+    c.sendCleartext(msg);
+  }
+  void sendSecret(const MsgInfo& info){ ... }
+};
+\end{verbatim}
+
+如果我们想每次发信息的时候要记录某些东西，我们会想出这样的解法：
+\begin{verbatim}
+template<typename Company>
+class LoggingMsgSender: public MsgSender<Company> {
+public:
+  void sendClearMsg(const MsgInfo& info){
+    write "before sending" info to the log;
+    sendClear(info); // call base class function;
+    // this code will not compile!
+     write "after sending" info to the log;
+  }
+  ...
+};
+\end{verbatim}
+
+这里我们换了一个不同的名称，这样既可以避免遮掩继承而得的名称，也避免重
+新定义一个继承而得的non-virtual函数。但是，以上代码无法通过编译，问题
+在于，编译器在遇到class template LoggingMsgSender定义式时，并不知道它
+继承什么样的class，更明确地说，编译器没办法知道它是否有
+\texttt{sendClear}函数。因此，\textbf{编译器往往拒绝在templatized base
+  class内寻找继承而来的名称。}
+
+\textbf{编译器编译期会去解析与模板无关的名称（都是静态绑定），运行期再
+  去解析与模板相关的名称，但不会进入templatized base class内寻找名称。} 
+
+\begin{verbatim}
+void g() { cout<<"gobal::g()"<<endl; }
+
+template<class T> class X {
+public:
+  void g() { cout<<"X::g()"<<endl; }
+};
+
+//Use of undeclared identifer g if global g() has been commented out.
+template<class T> class Y : public X<T> {
+public:
+  void f() { g(); this->g(); }
+};
+
+template<> class Y<char> : public X<char> {
+public:
+  void f() { g(); this->g(); }
+};
+
+Y<char> y;
+y.f(); \\ X::g() X::g()
+Y<int> y;
+y.f(); \\ global::g() X::g()
+\end{verbatim}
+
+我们有三种方法可以让C++“不进入templatized base classes观察”的行为失
+效：
+\begin{itemize}
+\item 在base class函数调用动作之前加上\texttt{this->}:
+\begin{verbatim}
+void sendClearMsg(const MsgInfo& info){
+  write "before sending" info to the log;
+  this->sendClear(info); // okay, assumes that
+  // sendClear will be inherited
+  write "after sending" info to the log;
+}
+\end{verbatim}
+\item 使用\texttt{using}声明式：
+\begin{verbatim}
+using MsgSender<Company>::sendClear; // tell compilers to assume that sendClear is in the base class
+void sendClearMsg(const MsgInfo& info){
+  ...
+  sendClear(info); // okay, assumes that sendClear will be inherited
+  ... // 
+}
+\end{verbatim}
+\item 指出被调用的函数位于base class内部：
+\begin{verbatim}
+void sendClearMsg(const MsgInfo& info){
+  ...
+  MsgSender<Company>::sendClear(info);
+  ... 
+}
+\end{verbatim}
+  但这样会关闭virtual绑定行为。
+\end{itemize}
+
+上述每一个解法都在\textbf{对编译器承诺，base class template的任何特化
+  版本都将支持其一般版本所提供的借口。}
+
+\subsection{将与参数无关的代码抽离templates}
+\label{sec:Item-44}
+
+\begin{verbatim}
+template<typename T, std::size_t n> 
+class SquareMatrix {
+public:
+  ...
+  void invert(); // invert the matrix in place
+};
+\end{verbatim}
+
+当n不同时会产生多个invert()函数，这个是重复的，因此我们可以这样解决：
+\begin{verbatim}
+template<typename T>
+class SquareMatrixBase {
+protected:
+  SquareMatrixBase(std::size_t n, T *pMem) : size(n), pData(pMem) {} 
+  void setDataPtr(T *ptr) { pData = ptr; } // reassign pData
+  ...
+private:
+  std::size_t size; // size of matrix
+  T *pData; // pointer to matrix values
+};
+
+template<typename T, std::size_t n>
+class SquareMatrix: private SquareMatrixBase<T> {
+public:
+  SquareMatrix() : SquareMatrixBase<T>(n, 0), /pData(new T[n*n])
+  { this->setDataPtr(pData.get()); } //give a copy of it to the base class
+private:
+  boost::scoped_array<T> pData; // see Item 13 for info on
+};
+\end{verbatim}
+
+\subsection{运用成员函数模板接受所有兼容类型}
+\label{sec:Item-45}
+
+真实指针做得很好的一件事是支持隐式转换：Derived class指针可以隐式转换
+为base class指针，non-const对象指针可以转换为const对象的指针等等。但是
+智能指针比较麻烦，因为同一个template的不同instantiations之间没有固有关
+系。
+
+我们可以使用member function templates：
+\begin{verbatim}
+template<typename T>
+class SmartPtr {
+public:
+  template<typename U>
+  SmartPtr(const SmartPtr<U>& other)
+  : heldPtr(other.get()) { ... } 
+  T* get() const { return heldPtr; }
+  ...
+private:
+  T *heldPtr;
+};
+\end{verbatim}
+这个行为只有当坐在某个隐式转换的时候才能通过编译，这正是我们想要的。
+
+除了构造函数，这种方法也支持赋值操作。但有一点要注意：如果你声明
+member template用于拷贝构造或赋值操作，你还是要声明正常的拷贝构造函数
+和拷贝赋值操作符。
+\begin{verbatim}
+template<class T> class shared_ptr {
+public:
+  template<class Y> 
+  explicit shared_ptr(Y * p);
+  template<class Y> 
+  shared_ptr(shared_ptr<Y> const& r); 
+  template<class Y> 
+  explicit shared_ptr(weak_ptr<Y> const& r);
+  template<class Y>
+  explicit shared_ptr(auto_ptr<Y>& r); //there is not const!
+  template<class Y>
+  shared_ptr& operator=(shared_ptr<Y> const& r);
+  template<class Y> 
+  shared_ptr& operator=(auto_ptr<Y>& r); 
+\end{verbatim}
+从某个内置指针或者智能指针类型另一个\texttt{shared\_ptr}类型是不允许的。
+\texttt{auto\_ptr}是并未被声明为const的。
+
+\subsection{需要类型转换时将模板定义为非成员函数}
+\label{sec:Item-46}
+
+Section \ref{sec:Item-46}讨论过为什么只有non-member函数才有能力在所有
+实参上实施隐式类型转换，在这里我们将其模板化了。
+
+\begin{verbatim}
+template<typename T>
+class Rational {
+public:
+  Rational(const T& numerator = 0, const T& denominator = 1); 
+  const T numerator() const; 
+  const T denominator() const;
+};
+template<typename T>
+const Rational<T> operator*(const Rational<T>& lhs, const Rational<T>& rhs)
+{ ... }
+
+Rational<int> oneHalf(1, 2); 
+Rational<int> result = oneHalf * 2; // error! won’t compile
+\end{verbatim}
+
+在调用operator*的时候，编译器并不知道我们想要调用什么函数，它需要想出
+什么函数被operator*的template具现化出来，所以需要先算出T是什么，但是
+\textbf{template的实参推导规程并不考虑“通过构造函数而发生的”隐式类型
+  转换。}
+
+解决办法就是在template class内使用friend声明式：
+
+\begin{verbatim}
+template<typename T>
+class Rational {
+public:
+  ...
+  friend const Rational operator*(const Rational& lhs, const Rational& rhs); 
+};
+template<typename T> 
+const Rational<T> operator*(const Rational<T>& lhs, const Rational<T>& rhs)
+{ ... }
+\end{verbatim}
+
+当\texttt{oneHalf}被声明为一个\texttt{Rational<int>}的时候，
+\texttt{class Rational<int>}也被具现化出来，同时friend函数也就被自动声
+明出来，它此时只是一个函数而非函数模板，因此编译器调用他的时候就可以使
+用隐式转换函数了。
+
+但此时能通过链接，但是无法编译，因为这个函数只被声明于类内部，并没有被
+定义出来，\textbf{最简单的可行办法就是将\texttt{operator*}本体合并至声
+  明式内部。}
+
+这个技术的一个趣味点是：我们虽然用friend，却与其传统用途“访问class的
+non-public”成分毫不相干。为了让类型转换发生于所有实参上，我们需要
+non-member函数；为了令函数被自动具现化，需要声明在class内部，而在class
+内部声明一个non-member函数的唯一办法就是friend。
+
+正如Section~\ref{sec:Item-30}所说，定义在class内部的函数都会成为inline，
+为了减少这种inline声明带来的冲击，我们可以让\texttt{operator*}不作任何
+事情，让它去调用辅助函数：
+\begin{verbatim}
+template<typename T> class Rational;
+template<typename T> 
+const Rational<T> doMultiply( const Rational<T>& lhs, const
+Rational<T>& rhs);
+template<typename T>
+class Rational {
+public:
+  ...
+  friend const Rational<T> operator*(const Rational<T>& lhs,
+const Rational<T>& rhs)
+  { return doMultiply(lhs, rhs);
+  ...
+};
+\end{verbatim}
+
+\subsection{使用traits classes表现类型信息}
+\label{sec:Item-47}
+
+STL有五种迭代器：
+\begin{itemize}
+\item \textbf{Input迭代器}只能向前移动，一次一步，客户只能读取它们所指
+  的东西，且只能读取一次，例如\texttt{istream\_iterators}
+\item \textbf{Output迭代器}类似，例如\texttt{ostream\_iterators}，他们
+  俩只适合一次性操作算法（one-pass algorithms）
+\item \textbf{forward}迭代器可以做前面的事情，也可以读或写一次以上，使
+  得它们可以用于多次性操作算法，例如单向linked list的迭代器，
+\item \textbf{Bidirectional迭代器}可以双向移动，例如STL的
+  list, set, multiset, map, multimap的迭代器。
+\item \textbf{random access迭代器}，它最有威力，因为它可以执行迭代器算
+  术：在常量时间内向前或向后跳跃人以距离，例如vector, dequem string的
+  迭代器。
+\end{itemize}
+对于这五种分类，STL分别提供专属的卷标结构（tag struct）加以确认：
+\begin{verbatim}
+struct input_iterator_tag {};
+struct output_iterator_tag {};
+struct forward_iterator_tag: public input_iterator_tag {};
+struct bidirectional_iterator_tag: public forward_iterator_tag {};
+struct random_access_iterator_tag: public bidirectional_iterator_tag {};
+\end{verbatim}
+
+如果我们想实现advance函数来将迭代器移动某个距离：
+\begin{verbatim}
+template<typename IterT, typename DistT>
+void advance(IterT& iter, DistT d){
+  if (iter is a random access iterator) {
+    iter += d; // use iterator arithmetic
+  }
+  else {
+    if (d >= 0) { while (d--) ++iter; }
+    else { while (d++) --iter; }
+  }
+}
+\end{verbatim}
+这种做法必须先判断iter是不是random access迭代器，这就是traits要做的事
+情：它们允许你在编译期间取得某些类型信息。
+
+\begin{verbatim}
+template < ... > // template params elided
+class deque {
+public:
+  class iterator {
+  public:
+    typedef random_access_iterator_tag iterator_category;
+    ...
+  };
+  ...
+};
+
+template<typename IterT>
+struct iterator_traits {
+  typedef typename IterT::iterator_category iterator_category;
+  ...
+};
+\end{verbatim}
+这对用户自定义类型行得通，但这对指针行不通，因为指针不可能嵌套
+\texttt{typedef}，因此还有第二部分：
+\begin{verbatim}
+template<typename T> // partial template specialization
+struct iterator_traits<T*> // for built-in pointer types
+{
+  typedef random_access_iterator_tag iterator_category;
+  ...
+};
+\end{verbatim}
+
+现在就应该知道如何设计一个traits class了：
+\begin{enumerate}
+\item 确认若干你希望将来可取得的类型相关信息。例如对迭代器而言，我们希
+  望取得它的分类。
+\item 为该信息选择一个名称。
+\item 提供一个template和一组特化版本，内含你支持的类型相关信息。
+\end{enumerate}
+
+现在就有了advance的伪代码：
+\begin{verbatim}
+template<typename IterT, typename DistT>
+void advance(IterT& iter, DistT d){
+  if (typeid(typename std::iterator_traits<IterT>::iterator_category) ==
+  typeid(std::random_access_iterator_tag))
+  ...
+}
+\end{verbatim}
+
+但是它还会有问题，\texttt{if}语句是在运行期才会核定，我们希望它能在编
+译器就完成（C++17有了\texttt{if constexpr}），我们也可以选择重载：
+\begin{verbatim}
+template<typename IterT, typename DistT> 
+void doAdvance(IterT& iter, DistT d, std::random_access_iterator_tag){
+  iter += d;
+}
+template<typename IterT, typename DistT>
+void doAdvance(IterT& iter, DistT d, std::bidirectional_iterator_tag){
+  if (d >= 0) { while (d--) ++iter; }
+  else { while (d++) --iter; }
+}
+template<typename IterT, typename DistT>
+void doAdvance(IterT& iter, DistT d, std::input_iterator_tag){
+  if (d < 0 ) {
+    throw std::out_of_range("Negative distance"); // see below
+  }
+  while (d--) ++iter;
+}
+\end{verbatim}
+这里也就是继承关系带来的一项红利。于是我们可以实现出advance函数：
+\begin{verbatim}
+template<typename IterT, typename DistT>
+void advance(IterT& iter, DistT d){
+  doAdvance(iter, d, typename  std::iterator_traits<IterT>::iterator_category());
+}
+\end{verbatim}
+
+我们现在总结一下如何使用traits class：
+\begin{enumerate}
+\item 建立一组重载函数或者函数模板，彼此间的差异只在于各自的traits参数，
+  令每个函数实现与tarits信息对应。
+\item 建立一个控制函数或者函数模板，它调用上述重载函数并传递traits
+  class所提供的信息。
+\end{enumerate}
+
+不光\texttt{iterator\_traits}在用，\texttt{iterator\_category}还提供灵
+四分迭代器相关信息，其中最有用的是\texttt{value\_type}，可以参考
+Section~\ref{sec:Item-42}。另外还有\texttt{char\_traits},
+\texttt{numeric\_limits}。
+
+\subsection{认识template元编程}
+\label{sec:Item-48}
+
+\textbf{Template metaprogramming}（TMP，模板元编程)是编写
+template-based C++程序并执行于编译器的过程。TMP有两个作用：可以让事情
+变得更容易，也可以将工作从运行期转移到编译期，从而使得某些错误在编译期
+就可以找到，并且程序会更高效，比如上一节的typeid和traits的比较。
+
+\begin{verbatim}
+void advance(std::list<int>::iterator& iter, int d){
+  if(typeid(std::iterator_traits<std::list<int>::iterator>::iterator_category)
+     == typeid(std::random_access_iterator_tag)) {
+    iter += d; // error! won’t compile
+  }
+  else {
+    if (d >= 0) { while (d--) ++iter; }
+    else { while (d++) --iter; }
+  }
+}
+\end{verbatim}
+
+即便if语句判断是错的，内部代码还是会被检查，由于list的iterator不存在+=
+运算，所以无法通过编译。
+
+TMP还可以用来\textbf{递归模板具现化}：
+\begin{verbatim}
+template<unsigned n> 
+struct Factorial {
+  enum { value = n * Factorial<n-1>::value };
+};
+template<>
+struct Factorial<0> {
+  enum { value = 1 };
+};
+std::cout << Factorial<5>::value;
+\end{verbatim}
+
+下面举TMP的三个重要例子：
+\begin{itemize}
+\item 确保量度单位准确，比如将一个质量变量赋值给一个速度变量是错误的但
+  是一个距离变量除以时间变量再赋值给速度变量是成立的，如果使用TMP，就
+  可以保证在编译期程序中所有量度单位的组合都正确。
+\item 表达式模板可以优化矩阵运算，见Section \ref{sec:ExpreesionTemp}：
+\begin{verbatim}
+typedef SquareMatrix<double, 10000> BigMatrix;
+BigMatrix m1, m2, m3, m4, m5;
+BigMatrix result = m1 * m2 * m3 * m4 * m5; 
+\end{verbatim}
+\item 生成各种design pattern。
+\end{itemize}
+
+\clearpage
+\section{定制new和delete}
+
+\subsection{了解new-handler的行为}
+\label{sec:Item-49}
+
+当\texttt{operator new}抛出异常的时候，他会先调用一个客户指定的错误处
+理函数，称为\texttt{new-handler}（并非全部事实，真正做的事情会更复杂一
+点，见Section~\ref{sec:Item-51}）。为了指定这个函数，客户必须调用
+\texttt{set\_new\_handler}，这是声明于\texttt{<new>}的函数：
+\begin{verbatim}
+namespace std {
+  typedef void (*new_handler)();
+  new_handler set_new_handler(new_handler p) throw();
+}
+\end{verbatim}
+
+\texttt{set\_new\_handler}的参数是个指针指向\texttt{operator new}无法
+分配足够内存的时候调用的函数，返回值也是个指针，指向
+\texttt{set\_new\_handle}被调用前正在执行的哪个\texttt{new-handler}函
+数。可以这样使用：
+
+\begin{verbatim}
+void outOfMem()
+{
+  std::cerr << "Unable to satisfy request for memory\n";
+  std::abort();
+}
+int main()
+{
+  std::set_new_handler(outOfMem);
+  int *pBigDataArray = new int[100000000L];
+  ...
+}
+\end{verbatim}
+
+当\texttt{operator new}无法满足内存申请时，它会不断调用
+\texttt{new-handler}函数，直到找到足够内存。一个设计良好的
+\texttt{new-handler}函数必须做到：
+\begin{enumerate}
+\item 让更多内存可被使用。实现该策略的一个做法是程序一开始执行就分配一
+  大块内存，当new-handler第一次被调用再将它们还给程序使用。
+\item 安装另一个new-handler。如果这个new-handler无法取得更多可用内存，
+  或许他知道另外哪个new-handler有此能力，就可以让它替换自己。为达到此
+  目的，做法之一是new-handler修改“会影响其行为”的static数据，
+  namespace数据或global数据。
+\item 卸除new-handler：将null传给\texttt{set\_new\_handler}，
+  \texttt{operator new}则会在不成功时抛出异常。
+\item 抛出\texttt{bad\_alloc}异常，它会被传播到内存索求处。
+\item 不返回，调用\texttt{abort}或者\texttt{exit}。
+\end{enumerate}
+
+若想在class中使用，只需令class提供自己的\texttt{set\_new\_handler}和
+\texttt{operator new}即可。
+
+\begin{verbatim}
+class Widget {
+public:
+  static std::new_handler set_new_handler(std::new_handler p) throw();
+  static void* operator new(std::size_t size) throw(std::bad_alloc);
+private:
+  static std::new_handler currentHandler;
+};
+std::new_handler Widget::currentHandler = 0;
+
+std::new_handler Widget::set_new_handler(std::new_handler p) throw(){
+  std::new_handler oldHandler = currentHandler;
+  currentHandler = p;
+  return oldHandler;
+}
+\end{verbatim}
+最后， \texttt{Widget}的\texttt{operator new}做以下事情：
+\begin{enumerate}
+\item 调用标准\texttt{set\_new\_handler}，告知Widget的错误处理函数，这
+  会为\texttt{Widget}安装global \texttt{new-handler}
+\item 调用global \texttt{operator new}，执行实际内存分配。如果分配失败，
+  global \texttt{operator new}会调用\texttt{Widget}的
+  \texttt{new-handler}。
+\item 如果最终无法分配足够内存，就会抛出\texttt{bad\_alloc}异常，在此
+  情况下，\texttt{Widget}的\texttt{operator new}必须恢复原本的glocal
+  \texttt{new-handler}然后再传播该异常。 
+  为确保原本的new-handler总能被重新安装回去，\texttt{Widget}将global
+  \texttt{new-handler}视为资源并遵守Section~\ref{sec:Item-13}，运用资
+  源管理对象防止资源泄露。
+\item 如果global \texttt{operator new}能够分配足够内存，则会返回一个指
+  针，指向分配所得。\texttt{Widget}析构函数会管理glocal
+  \texttt{new-handler}，它会自动将\texttt{operator new}被调用前的
+  \texttt{new-handler}恢复回来。
+\end{enumerate}
+
+\begin{verbatim}
+class NewHandlerHolder {
+public:
+  explicit NewHandlerHolder(std::new_handler nh) : handler(nh) {}
+  ~NewHandlerHolder() { std::set_new_handler(handler); }
+private:
+  std::new_handler handler;
+  NewHandlerHolder(const NewHandlerHolder&); // prevent copying
+  NewHandlerHolder& operator=(const NewHandlerHolder&);
+};
+
+void* Widget::operator new(std::size_t size) throw(std::bad_alloc){
+  // install Widget’s new-handler
+  NewHandlerHolder h(std::set_new_handler(currentHandler)); 
+  return ::operator new(size); // allocate memory or throw
+}
+\end{verbatim}
+
+\texttt{Widget}的客户应该类似这样使用其\texttt{new-handler}：
+\begin{verbatim}
+// decl. of func. to call if mem. alloc. for Widget objects fails
+void outOfMem(); 
+
+/ set outOfMem as Widget’s new-handling function
+Widget::set_new_handler(outOfMem);
+
+// if memory allocation fails, call outOfMem
+Widget *pw1 = new Widget; 
+
+// if memory allocation fails, call the global new-handling function (if there is one)
+std::string *ps = new std::string; 
+
+Widget::set_new_handler(0);
+Widget *pw2 = new Widget; 
+// if mem. alloc. fails, throw an exception immediately.
+\end{verbatim}
+
+实现这个方案的代码并不因class的不同而不同，所以可以提取出来复用：
+
+\begin{verbatim}
+template<typename T> // “mixin-style” base class 
+class NewHandlerSupport {
+public: 
+  static std::new_handler set_new_handler(std::new_handler p) throw();
+  static void* operator new(std::size_t size) throw(std::bad_alloc);
+  ...
+private:
+  static std::new_handler currentHandler;
+};
+
+template<typename T>
+std::new_handler NewHandlerSupport<T>::set_new_handler(std::new_handler p) throw(){
+  std::new_handler oldHandler = currentHandler;
+  currentHandler = p;
+  return oldHandler;
+}
+template<typename T>
+void* NewHandlerSupport<T>::operator new(std::size_t size) throw(std::bad_alloc){
+  NewHandlerHolder h(std::set_new_handler(currentHandler));
+  return ::operator new(size);
+}
+
+// this initializes each currentHandler to null
+template<typename T>
+std::new_handler NewHandlerSupport<T>::currentHandler = 0;
+
+class Widget: public NewHandlerSupport<Widget> {
+  ...
+};
+\end{verbatim}
+
+\texttt{Widget}继承自一个模板化的base class，后者又以\texttt{Widget}作
+为类型参数，这种模式称为\textbf{curiously recurring template pattern;
+  CRTP}，可以理解为\texttt{Do It For Me}。
+
+\subsection{了解new和delete的合理替换时机}
+\label{sec:Item-50}
+
+有三个常见理由：
+\begin{enumerate}
+\item \textbf{用来检测运用上的错误。}如果new所得内存delete时不行失败，
+  就会内存泄漏，多次delete则会导致不确定行为。如果operator new持有一串
+  动态分配的地址，delete将地址从中一走，倒是很容易检测出来该错误。
+
+  此外各种各样的变成错误可能导致数据overruns（写入点在分配区块尾端之后）
+  或者underruns。如果我们自行定义operator news，便可以超额分配内存，用
+  额外空间放置特定的signatures，operator delete可以检查上述signatures
+  是否原封不动，如果不是就表示发生了overrun或者underrun，这时候就可以
+  log下这个事实。
+\item \textbf{为了强化效能。}编译器自带的new和delete主要为了一般目的，
+  它们不但可以被长时间执行的程序接受也可以被少于1s的程序接受；它们必须
+  处理大块、小块、大小混合型内存；它们还必须接纳各种分配形态；它们必须
+  考虑破碎问题。所以有时候定制版本性能会更好，速度快，所需内存少。
+\item \textbf{为了收集使用上的统计数据。}分配区块的大小分布如何？寿命
+  分布如何？倾向于FIFO还是LIFO还是随机次序来分配和归还？运用形态是否随
+  时间改变？最大动态分配量是多少？
+\item \textbf{增加分配和归还的速度。}
+\item \textbf{降低缺省内存管理器带来的空间额外消耗。} 可以看
+  \textbf{Boost::Pool 程序库}
+\item \textbf{弥补缺省分配器的非最佳齐suboptimal alignment位。}
+\item \textbf{将相关对象成簇集中。}
+\item \textbf{为了获得非传统的行为。}
+\end{enumerate}
+
+以下是一个简单的少有问题的检测overruns或underruns的定制版new：
+\begin{verbatim}
+typedef unsigned char Byte;
+// this code has several flaws
+void* operator new(std::size_t size) throw(std::bad_alloc){
+  using namespace std;
+  size_t realSize = size + 2 * sizeof(int); 
+  // signatures will also fit inside
+  void *pMem = malloc(realSize); 
+  if (!pMem) throw bad_alloc(); 
+  *(static_cast<int*>(pMem)) = signature;
+  *(reinterpret_cast<int*>(static_cast<Byte*>(pMem)+realSize-sizeof(int))) = signature;
+  // return a pointer to the memory just past the first signature
+  return static_cast<Byte*>(pMem) + sizeof(int);
+}
+\end{verbatim}
+
+首先，它没有满足Section~\ref{sec:Item-51}所说的反复调用newhandler函数。
+另外，这里还涉及到\textbf{齐位（alignment）}。
+
+C++要求operator new返回的指针都有适当的对齐，malloc就是在这样的要求下
+工作，但是我们还加了一个偏移量。如果我们企图获得一个double所用的内存，
+但是偏移量只有4 bytes，这会导致程序崩溃或执行速度变慢。
+
+\subsection{编写new和delete时需要固守常规}
+\label{sec:Item-51}
+
+non-member operator new的伪码：
+\begin{verbatim}
+void* operator new(std::size_t size) throw(std::bad_alloc){
+  using namespace std; 
+  if (size == 0) { // handle 0-byte requests
+    size = 1; // by treating them as 1-byte requests
+  } 
+  while (true) {
+    attempt to allocate size bytes;
+    if (the allocation was successful)
+      return (a pointer to the memory);
+    // allocation was unsuccessful; find out what the current new-handling function is (see below)
+    new_handler globalHandler = set_new_handler(0);
+    set_new_handler(globalHandler);
+    if (globalHandler) (*globalHandler)();
+    else throw std::bad_alloc();
+   }
+}
+\end{verbatim}
+这里注意几点：
+\begin{itemize}
+\item 要处理0字节的情况
+\item 内存申请失败的话需要无限循环来尝试分配内存。
+\item 其中将new-handling设为null后又可恢复原样，因为我们没有办法直接获
+  得new-handling函数指针，这样很有效。
+\item Class专属版本还应该处理“比正确大小更大的（错误）申请”，因为
+  operator new会被derived class继承。
+\begin{verbatim}
+void* Base::operator new(std::size_t size) throw(std::bad_alloc){
+  if (size != sizeof(Base))
+    return ::operator new(size);
+}
+\end{verbatim}
+\end{itemize}
+
+撰写delete唯一需要记住的事情就是\textbf{C++保证删除null指针永远安全。}
+以下为non-mamber delete的伪码：
+\begin{verbatim}
+void operator delete(void *rawMemory) throw(){
+  if (rawMemory == 0) return; // do nothing if the null pointer is being deleted
+  deallocate the memory pointed to by rawMemory;
+}
+\end{verbatim}
+
+如果是class版本则需要多加一个检查删除数量：
+\begin{verbatim}
+void Base::operator delete(void *rawMemory, std::size_t size) throw(){
+  if (rawMemory == 0) return; // check for null pointer
+  if (size != sizeof(Base)) {
+    ::operator delete(rawMemory); 
+    return; 
+  }
+  deallocate the memory pointed to by rawMemory;
+  return;
+}
+\end{verbatim}
+
+\subsection{写了placement new也要写placement delete}
+\label{sec:Item-52}
+
+\begin{verbatim}
+Widget *pw = new Widget;
+\end{verbatim}
+假如new调用成功，但是Widget的默认构造函数却抛出异常，那么该内存必须取
+消并恢复旧观，否则会造成内存泄漏，在这个时候客户没有能力归还内存，因此
+这个责任交给了C++运行期系统上，它会去调用new对应的delete版本，但是前提
+是他必须知道改调用哪一个。
+
+对于非正常形式的new，它要去寻找参数个数和类型都相同的delete。 因此：
+声明\textbf{placement new}必须要同时声明一个\textbf{placement delete}，
+否则不会调用任何一个delete从而导致内存泄漏。
+
+另外，也要必须小心避免让class专属的new掩盖客户其他的new（包括正常版本
+的new）（normal new的话再写一个函数调用，base new就用using）：
+\begin{verbatim}
+class Base {
+public:
+  ...
+  static void* operator new(std::size_t size, std::ostream& logStream) throw(std::bad_alloc); 
+  ...
+};
+Base *pb = new Base; // error! the normal form of operator new is hidden
+Base *pb = new (std::cerr) Base; // fine, placement new.
+
+class Derived: public Base {
+public:
+  ...
+  static void* operator new(std::size_t size) throw(std::bad_alloc);
+  ...
+};
+
+Derived *pd = new (std::clog) Derived; // error! Base’s placement new is hidden
+Derived *pd = new Derived; // fine
+\end{verbatim}
+
+缺省情况下，C++在global作用域内提供以下形式的operator new：
+\begin{verbatim}
+void* operator new(std::size_t) throw(std::bad_alloc); // normal new
+void* operator new(std::size_t, void*) throw(); // placement new
+void* operator new(std::size_t, const std::nothrow_t&) throw(); //nothrow new, return null if failed 
+\end{verbatim}
+
+\section{杂谈}
+
+\subsection{不要轻易忽视编译器的警告}
+\label{sec:Item-53}
+
 
 
 \input{Appendix}

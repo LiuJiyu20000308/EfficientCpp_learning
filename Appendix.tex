@@ -86,6 +86,9 @@ struct Boo{
 \label{sec:bind}
 
  
+\subsection{表达式模板}
+\label{sec:ExpreesionTemp}
+
 
 \subsection{重载、重写、重定义}
 \label{sec:Overload}
@@ -165,6 +168,17 @@ base -> f(1) // error! Derived version is unavailable.
 br -> f();
 br -> f("string"); // Base version available.
 \end{verbatim}
+
+\subsection{virtual实现原理}
+\label{sec:vptr}
+虚函数实现多态的机制，严格来说是动态多态，是在出现运行的时候实现的。
+
+虚函数的实现原理：每个虚函数都会有一个与之对应的虚函数表，该虚函数表的
+实质是一个指针数组，存放的是每一个对象的虚函数入口地址。对于一个派生类
+来说，他会继承基类的虚函数表同时增加自己的虚函数入口地址，如果派生类重
+写了基类的虚函数的话，那么继承过来的虚函数入口地址将被派生类的重写虚函
+数入口地址替代。那么在程序运行时会发生动态绑定，将父类指针绑定到实例化
+的对象实现多态。 
 
 \subsection{零碎知识点}
 
