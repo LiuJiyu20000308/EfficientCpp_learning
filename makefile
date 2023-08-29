@@ -1,4 +1,4 @@
-doc : EfficientCpp.tex
+doc : CppLearning.tex
 	pdflatex $<
 	pdflatex $<
 	make clean
@@ -6,3 +6,4 @@ doc : EfficientCpp.tex
 clean:
 	$(RM) *.aux *.bbl *.blg *.log *.dvi *.toc *~ *.out *.synctex.gz
 	rm -r auto
+	rm -r sec/auto
