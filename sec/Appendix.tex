@@ -77,7 +77,29 @@ struct Boo{
 \end{itemize}
 
 \subsection{万能引用}
+\label{sec:ForwardingRef}
 
+首先理解引用折叠，引用折叠会发生在模板实例化、\texttt{auto}类型推导、
+创建和运用\texttt{typedef}和别名声明、以及\texttt{decltype}语境中。
+
+引用折叠规则：
+\begin{itemize}
+\item 所有右值引用折叠到右值引用上仍然是一个右值引用。如\texttt{X\&\&
+    \&\&}折叠为\texttt{X\&\&}。 
+\item 所有的其他引用类型之间的折叠都将变成左值引用。如\texttt{X\& \&},
+  \texttt{X\& \&\&}, \texttt{X\&\& \&}折叠为\texttt{X\&}。可见左值引用
+  会传染，沾上一个左值引用就变左值引用了。根本原因：在一处声明为左值，
+  就说明该对象为持久对象，编译器就必须保证此对象可靠（左值）。
+\end{itemize}
+\begin{itemize}
+\item 当万能引用（\texttt{T\&\& param}）绑定到左值时，由于万能引用也是
+  一个引用，而左值只能绑定到左值引用。因此，\texttt{T}会被推导为
+  \texttt{T\&}类型。从而\texttt{param}的类型为\texttt{T\& \&\&}，引用
+  折叠后的类型为\texttt{T\&}。 
+\item 当万能引用（\texttt{T\&\& param}）绑定到右值时，同理，右值只能绑
+  定到右值引用上，故\texttt{T}会被推导为\texttt{T}类型。从而param的类
+  型就是\texttt{T\&\&}（右值引用）。
+\end{itemize}
 \subsection{std::function}
 \label{sec:function}
 
@@ -189,5 +211,5 @@ br -> f("string"); // Base version available.
 \end{itemize}
 %%% Local Variables:
 %%% mode: latex
-%%% TeX-master: "EfficientCpp"
+%%% TeX-master: "../CppLearning"
 %%% End:
