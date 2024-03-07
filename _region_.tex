@@ -1,0 +1,720 @@
+\message{ !name(../CppLearning.tex)}\documentclass[a4paper,twoside]{article}
+\usepackage{geometry}
+\geometry{margin=1cm,vmargin={0pt,1cm}}
+\setlength{\topmargin}{-2cm}
+\setlength{\paperheight}{23cm}
+\setlength{\paperwidth}{18cm}
+\setlength{\textheight}{19.6cm}
+\setlength{\textwidth}{15cm}
+\usepackage{makecell}
+%\usepackage{fancyhdr}
+\usepackage{siunitx}
+\usepackage{amssymb}
+\usepackage{indentfirst}
+\setlength{\parindent}{0.5em}
+
+\pagenumbering{arabic} 
+\usepackage{pdfpages}
+% useful packages.
+
+\usepackage{ctex}
+
+\usepackage{color}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{mathrsfs}
+ \usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{enumerate}
+\usepackage{xcolor,graphicx,float,subfigure}
+\usepackage{epstopdf}
+\usepackage{multicol}
+\usepackage{fancyhdr}
+\usepackage{layout}
+\usepackage{listings}
+\usepackage{dsfont}
+\lstset{language=Matlab}
+\lstset{breaklines}
+\lstset{extendedchars=false}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+\usepackage{xcolor}
+%\usepackage{cite}
+%\usepackage[numbers,sort&compress]{natbib} 
+%\setcitestyle{open={},close={}}
+%\usepackage{natbibspacing}
+%\renewcommand{\refname}{}
+\usepackage{anyfontsize}
+
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usetikzlibrary{arrows.meta}
+\tikzset{
+  dot/.style={
+    circle, fill=black, inner sep=1pt, outer sep=0pt
+  },
+  dot label/.style={
+    circle, inner sep=0pt, outer sep=1pt
+  }
+  arrow1/.style = {
+    draw = black, thick, -{Latex[length = 4mm, width = 1.5mm]},
+  }
+}
+
+
+% -------------------
+% Theorem Environments
+% -------------------
+\theoremstyle{definition}
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{prop}{Proposition}[section]
+\newtheorem{lem}{Lemma}[section]
+\newtheorem{coro}{Corollary}[section]
+
+\newtheorem{exm}{Example}[section]
+\newtheorem{nex}{Non-Example}[section]
+\newtheorem{defn}{Definition}[section]
+\theoremstyle{remark}
+\newtheorem{rmk}{Remark}[section] 
+\numberwithin{equation}{section}
+
+
+\newcommand{\dif}{\mathrm{d}}
+\newcommand{\avg}[1]{\left\langle #1 \right\rangle}
+\newcommand{\difFrac}[2]{\frac{\dif #1}{\dif #2}}
+\newcommand{\pdfFrac}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\OFL}{\mathrm{OFL}}
+\newcommand{\UFL}{\mathrm{UFL}}
+\newcommand{\fl}{\mathrm{fl}}
+\newcommand{\op}{\odot}
+\newcommand{\Eabs}{E_{\mathrm{abs}}}
+\newcommand{\Erel}{E_{\mathrm{rel}}}
+
+\newcommand{\Zero}{\hat{0}}
+\newcommand{\One}{\hat{1}}
+\newcommand{\Int}{\mathrm{int}}
+\newcommand{\unitV}{\mathds{1}}
+
+\newcommand{\bmi}{\mathbf{i}}
+\newcommand{\bmj}{\mathbf{j}}
+\newcommand{\bmn}{\mathbf{n}}
+
+\newcommand{\dist}[2]{\text{dist}\left(#1, #2\right)}
+\newcommand{\scientific}[2]{#1 \times 10^{#2}}
+
+
+%\newcommand{\Dim}{{\mathbf{D}}}
+\newcommand{\Dim}{{\scriptsize \textsf{D}}}
+\newcommand{\me}{\mathrm{e}}
+\newcommand{\mi}{\mathrm{i}}
+
+%\newcommand{\mod}{\mathrm{mod}}
+\newcommand{\curve}[1]{\widetilde{#1}}
+%\newcommand{\dt}{\delta t}
+\newcommand{\dt}{\tau}
+\newcommand{\isCovered}{\mathbin{ < \! \! \! \! \cdot }}
+%\newcommand{\cIncluded}{\mathbin{ \prec \! \! \! \cdot }}
+\newcommand{\coveredBy}{\lhd}
+%\newcommand{\regrz}[1]{\mathrm{cl}\left(\mathrm{int}\left(#1\right)\right)}
+\newcommand{\regrz}[1]{\mathrm{reg}\left(#1\right)}
+%\newcommand{\sgncup}{\ \hat{\cup} \ }
+\newcommand{\Span}{\mathrm{span}}
+\newcommand{\timeline}[2]{\phi_{t_0}^{#1}\left( #2 \right)}
+\newcommand{\timeBP}[1]{\overleftarrow{#1}}
+\newcommand{\timeBPA}[1]{\mathring{\overleftarrow{#1}}}
+\newcommand{\streak}[2]{\Psi_{t_0}^{#1}\left(#2\right)}
+\newcommand{\timelineA}[2]{\mathring{\phi}_{t_0,#2}^{#1}}
+\newcommand{\DRLN}[1]{{\cal D}_{\curve{#1}}}
+\newcommand{\DRLLN}[1]{{\cal D}_{\overline{#1}}}
+\newcommand{\DRLNA}[1]{\mathring{\cal D}_{\curve{#1}}}
+%\newcommand{\oplusDR}{\,\overline{\oplus}\,}
+\newcommand{\oplusDR}{\,\bar{\oplus}\,}
+\newcommand{\qo}{\hat{q}}
+\newcommand{\xo}{\hat{x}}
+\newcommand{\yo}{\hat{y}}
+\newcommand{\closure}[1]{\textrm{cl}\left(#1\right)}
+\newcommand{\vertexSequence}[4]{
+  \left( #1 \rightarrow #2 \rightarrow #3 \rightarrow #4 \rightarrow #1\right)}
+
+\newcommand{\ppSpace}{\Pi_{<\kappa,\bm{\xi},\bm{\nu}}}
+\newcommand{\pnSpace}{\mathbb{P}_{<\kappa}}
+\newcommand{\pnSpaceK}[1]{\mathbb{P}_{#1}}
+
+\newcommand{\Pyr}[2]{\textrm{Pyr}_{\cal{#1}}\left(\mathbf{#2}\right)}
+
+\let\OldTexttt\texttt
+\renewcommand{\texttt}[1]{{\color{blue} \OldTexttt{#1}}}
+
+%\pagestyle{plain}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\textbf{\thepage}}
+
+\makeatletter
+\newcommand\sixteen{\@setfontsize\sixteen{17pt}{6}}
+\renewcommand{\maketitle}{\bgroup\setlength{\parindent}{0pt}
+\begin{flushleft}
+\sixteen\bfseries \@title
+\medskip
+\end{flushleft}
+\textit{\@author}
+\egroup}
+\makeatother
+
+\title{C++ Learning}
+\begin{document}
+
+\message{ !name(sec/EffectiveModernCpp.tex) !offset(-167) }
+\newpage
+
+\section{类型推导}
+
+\subsection{理解模板类型推导}
+\label{sec:Item2-1}
+\begin{verbatim}
+template<typename T>
+void f(ParamType param);
+f(expr);
+\end{verbatim}
+
+在编译期间，编译器会用\texttt{expr}推到两个类型：\texttt{T}以及
+\texttt{ParamType}。这两种类型通常是不一样的，因为\texttt{ParamType}经
+常带修饰符，例如\texttt{const}或者\texttt{reference}。\texttt{T}类型的
+推导不仅仅取决于\texttt{expr}，也取决于\texttt{ParamType}的类型，分为
+三种情况：
+\begin{itemize}
+\item \texttt{ParamType}是指针或者引用类型，但不是通用引用
+  (Universal reference，\texttt{ParamType}带有\texttt{\&\&}修饰符，见
+  Section~\ref{sec:ForwardingRef}).
+\item \texttt{ParamType}是通用引用.
+\item \texttt{ParamType}既不是指针也不是引用。
+\end{itemize}
+
+以下将分类进行讨论：
+\begin{itemize}
+\item 当\texttt{ParamType}是指针或者引用类型，但不是通用引用时，类型推
+  导原理为：
+    \begin{enumerate}
+    \item 如果\texttt{expr}类型是引用的话，忽略引用。
+    \item 通过令\texttt{expr}
+    \end{enumerate}
+    和\texttt{ParamType}类型一致来决定\texttt{T}。
+  例如：
+\begin{verbatim}
+template<typename T>
+void f(T& param);
+void g(const T& param); // param is now a ref-to-const
+
+int x = 27;        // x is an int
+const int cx = x;  // cx is a const int
+const int& rx = x; // rx is a reference to x as a const int
+
+f(x);  // T is int, param's type is int&
+f(cx); // T is const int, param's type is const int&
+f(rx); // T is const int, param's type is const int&
+
+g(x); // T is int, param's type is const int&
+g(cx); // T is int, param's type is const int&
+g(rx); // T is int, param's type is const int&
+\end{verbatim}
+
+  
+\item \texttt{ParamType}为通用引用时，类型推导（见
+  Section~\ref{sec:Item2-24}）如下：
+  \begin{enumerate}
+  \item 如果\texttt{expr}为左值，则\texttt{T}和\texttt{ParamType}均为
+    左值引用，\textbf{这是唯一一种\texttt{T}被推导为引用的情况}，另外
+    值得注意的是，虽然\texttt{ParamType}带有\texttt{\&\&}，\textbf{但
+      还是被推导为左值引用。}
+  \item 如果\texttt{expr}为右值，那么推导和第一种情况类似。
+  \end{enumerate}
+
+  例如：
+\begin{verbatim}
+template<typename T>
+void f(T&& param); // param is now a universal reference
+
+int x = 27; // as before
+const int cx = x; // as before
+const int& rx = x; // as before
+
+f(x);  // x is lvalue, so T is int&,param's type is also int&
+f(cx); // cx is lvalue, so T is const int&, param's type is also const int&
+f(rx); // rx is lvalue, so T is const int&, param's type is also const int&
+f(27); // 27 is rvalue, so T is int, param's type is therefore int&&
+\end{verbatim}
+
+\item \texttt{ParamType}既不是指针也不是引用时，这意味着\texttt{param}
+  将会传递输入参数的副本，因此此时的类型推导如下：
+  \begin{enumerate}
+  \item 如果\texttt{expr}是一个引用，则忽略引用部分。
+  \item 如果忽略引用之后是\texttt{const}的，也将\texttt{const}忽略。如
+    果是\texttt{volatile}(见Section~\ref{sec:Item2-40})的也要忽略。
+  \end{enumerate}
+  例如：
+\begin{verbatim}
+template<typename T>
+void f(T param); // param is now passed by value
+
+int x = 27;       
+const int cx = x; 
+const int& rx = x; 
+f(x);  // T's and param's types are both int
+f(cx); // T's and param's types are again both int
+f(rx); // T's and param's types are still both int
+\end{verbatim}
+  这样做的原因是\texttt{cx}和\texttt{rx}不能被更改不代表\texttt{param}
+  不能被更改，另外，要意识到\textbf{\texttt{const}和\texttt{volatile}
+    只有在按值传入参数的时候会被忽略。}
+
+  如果\texttt{expr}是一个指向\texttt{const}对象的\texttt{const}指针的
+  话，\textbf{指针的\texttt{const}会被忽略}：
+\begin{verbatim}
+// ptr is const pointer to const object
+const char* const ptr = "Fun with pointers";
+
+// type deduced for param will be const char*
+f(ptr);
+\end{verbatim}
+\end{itemize}
+
+\textbf{在许多情况下，数组会退化为指向第一个元素的指针。当数组被传入到
+  一个by-value参数的模板中呢？}
+
+\begin{verbatim}
+template<typename T>
+void f(T param); // template with by-value parameter
+
+const char name[] = "J. P. Briggs"; // name's type is const char[13]
+f(name); // name is array, but T deduced as const char*
+\end{verbatim}
+
+但是如果\texttt{expr}是一个引用呢？
+
+\begin{verbatim}
+template<typename T>
+void f(T& param); // template with by-reference parameter
+
+f(name); // T is deduced to be const char [13]
+//paramType is const char (&)[13]
+\end{verbatim}
+
+这种语法使得我们可以利用模板来推导出数组元素个数：
+\begin{verbatim}
+template<typename T, std::size_t N> 
+constexpr std::size_t arraySize(T (&)[N]) noexcept{
+  return N; 
+}
+\end{verbatim}
+
+将函数声明为\texttt{constexpr}可以让结果在编译器就可以使用，同时也能让
+编译器生成更好的代码(见Section \ref{sec:Item2-14}, \ref{sec:Item2-15}):
+\begin{verbatim}
+int keyVals[] = { 1, 3, 7, 9, 11, 22, 35 }; // keyVals has 7 elements
+int mappedVals[arraySize(keyVals)]; // so does mappedVals
+std::array<int, arraySize(keyVals)> mappedVals; // mappedVals'size is 7 
+\end{verbatim}
+
+同样的，\textbf{函数类型也会退化到function指针}：
+
+\begin{verbatim}
+void someFunc(int, double); // someFunc is a function with type
+void(int, double)
+
+template<typename T>
+void f1(T param); // in f1, param passed by value
+template<typename T>
+void f2(T& param); // in f2, param passed by ref
+
+f1(someFunc); // param deduced as ptr-to-func;
+// type is void (*)(int, double)
+f2(someFunc); // param deduced as ref-to-func;
+// type is void (&)(int, double)
+\end{verbatim}
+
+\subsection{理解auto类型推导}
+\label{sec:Item2-2}
+
+当一个变量用\texttt{auto}声明的时候，\texttt{auto}扮演模板中的
+\texttt{T}的作用，变量的类型修饰符可以看做\texttt{ParamType}。
+
+同样的，\texttt{auto}也分为三个情况：
+\begin{itemize}
+\item 类型修饰符是指针或引用，但不是通用引用。
+\item 类型修饰符是通用引用。
+\item 类型修饰符既不是指针也不是引用。
+\end{itemize}
+
+\begin{verbatim}
+auto x = 27;        // case 3 (x is neither ptr nor ref)
+const auto cx = x;  // case 3 (cx isn't either)
+const auto& rx = x; // case 1 (rx is a non-universal ref)
+
+auto&& uref1 = x;  // uref1's type is int&
+auto&& uref2 = cx; // uref2's type is const int&
+auto&& uref3 = 27; // uref3's type is int&&
+
+const char name[] = "R. N. Briggs"; // name's type is const char[13]
+auto arr1 = name; // arr1's type is const char*
+auto& arr2 = name; // arr2's type is const char (&)[13]
+
+void someFunc(int, double); //void(int, double)
+auto func1 = someFunc; // func1's type is void (*)(int, double)
+auto& func2 = someFunc; // func2's type is void (&)(int, double)
+\end{verbatim}
+可以看到，\texttt{auto}类型推导和模板类型推导一致。只有一种情况下，它
+们是不同的：
+
+\begin{verbatim}
+int x1 = 27;
+int x2(27);
+int x3 = { 27 };
+int x4{ 27 };
+\end{verbatim}
+它们都是一个结果：值为27的\texttt{int}，但是如果我们换成\texttt{auto}
+的话，对于后两个而言，会定义一个只包含一个元素27的类型为
+\texttt{std::initializer\_list<int>}的对象。
+\begin{verbatim}
+auto x1 = 27; // type is int, value is 27
+auto x2(27); // ditto
+auto x3 = { 27 }; // type is std::initializer_list<int>, value is { 27 }
+auto x4{ 27 }; // ditto
+\end{verbatim}
+
+花括号初始化的时候，\texttt{auto}会推断为
+\texttt{std::initializer\_list<int>}，假如花括号内部类型不相同，则会报
+错：
+\begin{verbatim}
+auto x5 = { 1, 2, 3.0 }; // error! can't deduce T for std::initializer_list<T>
+\end{verbatim}
+
+然而对于模板而言，使用花括号的话类型推导会失败：
+\begin{verbatim}
+auto x = { 11, 23, 9 };
+template<typename T> 
+void f(T param);
+f({ 11, 23, 9 }); // error! can't deduce type for T
+
+template<typename T>
+void f(std::initializer_list<T> initList);
+f({ 11, 23, 9 });
+\end{verbatim}
+
+C++14中\texttt{auto}可以用在函数返回类型中，也可以在lambda表达式的参数
+声明中使用，然而\textbf{它们使用的是模板类型推导而不是\texttt{auto}类
+  型推导。}
+
+\begin{verbatim}
+auto createInitList(){
+  return { 1, 2, 3 }; // error: can't deduce type.
+}
+
+std::vector<int> v;
+auto resetV = [&v](const auto& newValue) { v = newValue; }; 
+resetV({ 1, 2, 3 }); // error! can't deduce type.
+\end{verbatim}
+
+
+\subsection{理解decltype}
+\label{sec:Item2-3}
+
+\texttt{decltype}会告诉你表达式的类型：
+\begin{verbatim}
+const int i = 0; // decltype(i) is const int
+bool f(const Widget& w); // decltype(w) is const Widget&
+// decltype(f) is bool(const Widget&)
+
+struct Point {
+int x, y; // decltype(Point::x) is int
+}; // decltype(Point::y) is int
+Widget w; // decltype(w) is Widget
+
+if (f(w)) … // decltype(f(w)) is bool
+
+template<typename T> // simplified version of std::vector
+class vector {
+public:
+…
+T& operator[](std::size_t index);
+…
+};
+vector<int> v; // decltype(v) is vector<int>
+if (v[0] == 0) … // decltype(v[0]) is int&
+\end{verbatim}
+
+在C++11中\texttt{decltype}主要用来声明那些返回值依赖于参数类型的函数模
+板。例如，假如函数要返回\texttt{vector<bool>}中的一个元素，然而
+\texttt{operator[]}并不会返回\texttt{bool\&}而是一个新的object，这里的
+关键是返回值是依赖于容器的：
+\begin{verbatim}
+// works, but requires refinement.
+template<typename Container, typename Index> 
+auto authAndAccess(Container& c, Index i) -> decltype(c[i]){
+  authenticateUser();
+  return c[i];
+}
+\end{verbatim}
+这就是C++11中的\textbf{返回值类型后置语法}。在C++14中可以只留下
+\texttt{auto}：
+\begin{verbatim}
+template<typename Container, typename Index>
+auto authAndAccess(Container& c, Index i){
+  authenticateUser();
+  return c[i]; // return type deduced from c[i]
+}
+\end{verbatim}
+
+这里\texttt{auto}按照模板类型推导，然而这里是存在问题的，虽然
+\texttt{operator[]}返回\texttt{T\&}，但是在推导时引用会被忽略，因此下
+面的代码是无法编译的：
+\begin{verbatim}
+std::deque<int> d;
+authAndAccess(d, 5) = 10; 
+\end{verbatim}
+
+C++14中，我们可以这样改进，我们称之为\texttt{decltype}推导方法：
+\begin{verbatim}
+// still have refinement.
+template<typename Container, typename Index> 
+decltype(auto) authAndAccess(Container& c, Index i){
+  authenticateUser();
+  return c[i];
+} // return type T&.
+\end{verbatim}
+
+这种推导方式也可以用作初始化表达式：
+\begin{verbatim}
+Widget w;
+const Widget& cw = w;
+auto myWidget1 = cw; // myWidget1's type is Widget
+decltype(auto) myWidget2 = cw; // myWidget2's type is const Widget&
+\end{verbatim}
+
+上面说到的refinement实际上是说，如果我想传入一个右值，例如一个临时的
+Container，这是无法编译通过的，因此我们还可以做出改进：
+
+\begin{verbatim}
+template<typename Container, typename Index> // final C++14 version
+decltype(auto) authAndAccess(Container&& c, Index i){
+  authenticateUser();
+  return std::forward<Container>(c)[i];
+}
+
+template<typename Container, typename Index> // final C++11 version
+auto authAndAccess(Container&& c, Index i)
+-> decltype(std::forward<Container>(c)[i]){
+  authenticateUser();
+  return std::forward<Container>(c)[i];
+}
+\end{verbatim}
+这里我们使用了\texttt{std::forward}，参见
+Section~\ref{sec:ForwardingRef}.
+
+当然，在极少数情况下\texttt{decltype}会得不到你期望的类型：如果对一个
+名称使用\texttt{decltype}是没有问题的，但是如果对于一个比名称复杂的左
+值表达式，\texttt{decltype}都会返回左值引用：
+\begin{verbatim}
+decltype(auto) f1(){
+  int x = 0;
+  return x; // decltype(x) is int, so f1 returns int
+}
+decltype(auto) f2(){
+  int x = 0;
+  return (x); // decltype((x)) is int&, so f2 returns int&
+}
+\end{verbatim}
+
+\subsection{了解如何去看类型推导}
+\label{sec:Item2-4}
+
+有以下几种方法：
+\begin{itemize}
+\item 通过IDE编辑器来看。
+\item 通过编译器诊断：
+\begin{verbatim}
+template<typename T> // declaration only for TD;
+class TD; // TD == "Type Displayer"
+TD<decltype(x)> xType;
+\end{verbatim}
+  编译器会报错：
+\begin{verbatim}
+error: 'xType' uses undefined class 'TD<int>'
+\end{verbatim}
+\item 运行期也可以输出：
+\begin{verbatim}
+#include <boost/type_index.hpp>
+std::cout << typeid(x).name() << '\n'; // display types for x
+using boost::typeindex::type_id_with_cvr;
+cout << "T = " << type_id_with_cvr<T>().pretty_name();
+\end{verbatim}
+\end{itemize}
+
+\section{auto}
+
+\subsection{相比于显式类型声明，更倾向于用auto}
+\label{sec:Item2-5}
+
+\begin{itemize}
+\item 使用\texttt{auto}可以避免忘记初始化：
+\begin{verbatim}
+int x1; // potentially uninitialized
+auto x2; // error! initializer required
+\end{verbatim}
+\item 也可以在声明与迭代器相关的局部变量时省点笔墨：
+\begin{verbatim}
+template<typename It> // as before
+void dwim(It b, It e){
+  while (b != e) {
+    // typename std::iterator_traits<It>::value_type
+    auto currValue = *b; 
+  }
+}
+\end{verbatim}
+\item 也可以表示那些只有编译器才知道的类型：
+\begin{verbatim}
+auto derefUPLess =  [](const std::unique_ptr<Widget>& p1,
+                       const std::unique_ptr<Widget>& p2)
+{ return *p1 < *p2; };
+\end{verbatim}
+  在C++14中这种特性得到了延续：
+\begin{verbatim}
+auto derefUPLess =  [](const auto& p1, const auto& p2)
+{ return *p1 < *p2; };
+\end{verbatim}
+\end{itemize}
+
+上边的函数的类型也可以写作:
+\begin{verbatim}
+std::function<bool(const std::unique_ptr<Widget>&,
+                   const std::unique_ptr<Widget>&)>
+derefUPLess =  [](const std::unique_ptr<Widget>& p1,
+                       const std::unique_ptr<Widget>& p2)
+{ return *p1 < *p2; };;
+\end{verbatim}
+它可以用来表示任何可调用的object。
+
+但是这样的话即使抛开语法的冗长，也需要重复参数类型，另外，使用
+\texttt{std::function}与使用\texttt{auto} 不同: 一个
+持有闭包的\texttt{auto}声明变量与closure具有相同的类型，因此它只使用
+closure所需的内存。 持有closure的\texttt{std::function}声明变量的类型
+是\texttt{std::function}  object的实例化模板，通常会比前者占用更多的内
+存，并且通过\texttt{std::function}调用一个closure会更慢。
+
+另外，\texttt{auto}也可以避免 "type shortcuts"：
+\begin{verbatim}
+std::unordered_map<std::string, int> m;
+for (const std::pair<std::string, int>& p : m){
+  // do something with p
+}
+\end{verbatim}
+这看起来很正确，但是却存在问题：\texttt{std::unordered\_map}的key类型
+是\texttt{const}的，所以Hash表中的\texttt{std::pair}的类型是
+\texttt{std::pair<const std::string, int>}。因此，编译器会创造一个临时
+object绑定在p上，之后再销毁。所以为了避免这种意外情况，我们可以：
+\begin{verbatim}
+for (const auto& p : m){
+  // as before
+}
+\end{verbatim}
+
+当然，\texttt{auto}也不是完美的，有的时候类型推断会得到意料之外的结果，
+可以看Section~\ref{sec:Item2-2},\ref{sec:Item2-6}. 另外，在编程中，有
+时如果为了可读性更好，也可以少使用一点\texttt{auto}。
+
+\subsection{当auto推断出意料之外的类型时请使用显式类型初始化}
+\label{sec:Item2-6}
+
+有些时候\texttt{auto}类型推导与你期望的结果不同，例如：如果我有一个输
+入\texttt{Widget}输出\texttt{std::vector<bool>}的函数：
+\begin{verbatim}
+std::vector<bool> features(const Widget& w);
+Widget w;
+bool highPriority = features(w)[5];
+processWidget(w, highPriority);
+\end{verbatim}
+这样看起来没有问题，但如果我们换成\texttt{auto}类型声明呢？
+\begin{verbatim}
+auto highPriority = features(w)[5];
+processWidget(w, highPriority); // undefined behavior!
+\end{verbatim}
+
+\textbf{此时\texttt{highPriority}的类型不再是\texttt{bool}而是
+\texttt{std::vector<bool>::reference}了。}因为
+\texttt{std::vector<bool>}并不是容器，而是一个压缩形式的\texttt{bool}，
+一个字节表示一个\texttt{bool}，然而C++不允许引用一个字节，因此有了
+\texttt{std::vector<bool>::reference}像一个\texttt{bool\&}，为了表现像
+一个\texttt{bool\&}，它存在向\texttt{bool}的隐式转换。
+
+此时\texttt{highPriority}指向了一个临时变量所占据的一个字节，在语句过
+后，\texttt{features(w)}这个临时变量销毁，\texttt{highPriority}相当于
+变成了一个悬挂指针，因此后续会出现undefined behavior。
+
+\texttt{std::vector<bool>::reference}是一种\textbf{代理类}：为了模拟和
+增强某些其他类型的行为而存在的类。代理类被用于多种用途：
+\begin{itemize}
+\item \texttt{std::vector<bool>::reference}是用于提供
+  \texttt{std::vector<bool>}的\texttt{operator[]}操作返回一个指向字节
+  的引用的幻觉的。
+\item 智能指针用于资源管理。
+\item 表达式模板。
+\end{itemize}
+
+\section{Modern C++}
+
+\subsection{构造object时注意区分()和\{\}}
+\label{sec:Item2-7}
+
+初始化分为三种：括号、等号或者大括号，有时候还可能等号和大括号同时
+出现：
+\begin{verbatim}
+int x(0); // initializer is in parentheses
+int y = 0; // initializer follows "="
+int z{ 0 }; // initializer is in braces
+\end{verbatim}
+
+对于用户定义的类而言，区分赋值和初始化是很重要的，因为会调用不同的函数：
+\begin{verbatim}
+Widget w1; // call default constructor
+Widget w2 = w1; // not an assignment; calls copy ctor
+w1 = w2; // an assignment; calls copy operator=
+\end{verbatim}
+
+C++98无法直接初始化一个具有特定值的STL容器，但是C++11有了通用初始化
+(uniform initialization)就可以了：
+\begin{verbatim}
+std::vector<int> v{ 1, 3, 5 };
+\end{verbatim}
+
+大括号也可以用来为non-static数据成员提供默认初始值：
+\begin{verbatim}
+class Widget {
+private:
+  int x{ 0 }; // fine, x's default value is 0
+  int y = 0; // also fine
+  int z(0); // error!
+};
+\end{verbatim}
+
+不可拷贝的对象（例如\texttt{std::atomics}，见
+Section~\ref{sec:Item2-10}）也可以使用大括号或者括号来初始化，但不能用
+等号：
+\begin{verbatim}
+std::atomic<int> ai1{ 0 }; // fine
+std::atomic<int> ai2(0);   // fine
+std::atomic<int> ai3 = 0;  // error!
+\end{verbatim}
+
+另外，大括号初始化的一个新颖的特点就是
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../CppLearning"
+%%% End:
+
+\message{ !name(../CppLearning.tex) !offset(-540) }
+
+\end{document}
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:

@@ -381,6 +381,886 @@ using boost::typeindex::type_id_with_cvr;
 cout << "T = " << type_id_with_cvr<T>().pretty_name();
 \end{verbatim}
 \end{itemize}
+
+\section{auto}
+
+\subsection{相比于显式类型声明，更倾向于用auto}
+\label{sec:Item2-5}
+
+\begin{itemize}
+\item 使用\texttt{auto}可以避免忘记初始化：
+\begin{verbatim}
+int x1; // potentially uninitialized
+auto x2; // error! initializer required
+\end{verbatim}
+\item 也可以在声明与迭代器相关的局部变量时省点笔墨：
+\begin{verbatim}
+template<typename It> // as before
+void dwim(It b, It e){
+  while (b != e) {
+    // typename std::iterator_traits<It>::value_type
+    auto currValue = *b; 
+  }
+}
+\end{verbatim}
+\item 也可以表示那些只有编译器才知道的类型：
+\begin{verbatim}
+auto derefUPLess =  [](const std::unique_ptr<Widget>& p1,
+                       const std::unique_ptr<Widget>& p2)
+{ return *p1 < *p2; };
+\end{verbatim}
+  在C++14中这种特性得到了延续：
+\begin{verbatim}
+auto derefUPLess =  [](const auto& p1, const auto& p2)
+{ return *p1 < *p2; };
+\end{verbatim}
+\end{itemize}
+
+上边的函数的类型也可以写作:
+\begin{verbatim}
+std::function<bool(const std::unique_ptr<Widget>&,
+                   const std::unique_ptr<Widget>&)>
+derefUPLess =  [](const std::unique_ptr<Widget>& p1,
+                       const std::unique_ptr<Widget>& p2)
+{ return *p1 < *p2; };;
+\end{verbatim}
+它可以用来表示任何可调用的object。
+
+但是这样的话即使抛开语法的冗长，也需要重复参数类型，另外，使用
+\texttt{std::function}与使用\texttt{auto} 不同: 一个
+持有闭包的\texttt{auto}声明变量与closure具有相同的类型，因此它只使用
+closure所需的内存。 持有closure的\texttt{std::function}声明变量的类型
+是\texttt{std::function}  object的实例化模板，通常会比前者占用更多的内
+存，并且通过\texttt{std::function}调用一个closure会更慢。
+
+另外，\texttt{auto}也可以避免 "type shortcuts"：
+\begin{verbatim}
+std::unordered_map<std::string, int> m;
+for (const std::pair<std::string, int>& p : m){
+  // do something with p
+}
+\end{verbatim}
+这看起来很正确，但是却存在问题：\texttt{std::unordered\_map}的key类型
+是\texttt{const}的，所以Hash表中的\texttt{std::pair}的类型是
+\texttt{std::pair<const std::string, int>}。因此，编译器会创造一个临时
+object绑定在p上，之后再销毁。所以为了避免这种意外情况，我们可以：
+\begin{verbatim}
+for (const auto& p : m){
+  // as before
+}
+\end{verbatim}
+
+当然，\texttt{auto}也不是完美的，有的时候类型推断会得到意料之外的结果，
+可以看Section~\ref{sec:Item2-2},\ref{sec:Item2-6}. 另外，在编程中，有
+时如果为了可读性更好，也可以少使用一点\texttt{auto}。
+
+\subsection{当auto推断出意料之外的类型时请使用显式类型初始化}
+\label{sec:Item2-6}
+
+有些时候\texttt{auto}类型推导与你期望的结果不同，例如：如果我有一个输
+入\texttt{Widget}输出\texttt{std::vector<bool>}的函数：
+\begin{verbatim}
+std::vector<bool> features(const Widget& w);
+Widget w;
+bool highPriority = features(w)[5];
+processWidget(w, highPriority);
+\end{verbatim}
+这样看起来没有问题，但如果我们换成\texttt{auto}类型声明呢？
+\begin{verbatim}
+auto highPriority = features(w)[5];
+processWidget(w, highPriority); // undefined behavior!
+\end{verbatim}
+
+\textbf{此时\texttt{highPriority}的类型不再是\texttt{bool}而是
+\texttt{std::vector<bool>::reference}了。}因为
+\texttt{std::vector<bool>}并不是容器，而是一个压缩形式的\texttt{bool}，
+一个字节表示一个\texttt{bool}，然而C++不允许引用一个字节，因此有了
+\texttt{std::vector<bool>::reference}像一个\texttt{bool\&}，为了表现像
+一个\texttt{bool\&}，它存在向\texttt{bool}的隐式转换。
+
+此时\texttt{highPriority}指向了一个临时变量所占据的一个字节，在语句过
+后，\texttt{features(w)}这个临时变量销毁，\texttt{highPriority}相当于
+变成了一个悬挂指针，因此后续会出现undefined behavior。
+
+\texttt{std::vector<bool>::reference}是一种\textbf{代理类}：为了模拟和
+增强某些其他类型的行为而存在的类。代理类被用于多种用途：
+\begin{itemize}
+\item \texttt{std::vector<bool>::reference}是用于提供
+  \texttt{std::vector<bool>}的\texttt{operator[]}操作返回一个指向字节
+  的引用的幻觉的。
+\item 智能指针用于资源管理。
+\item 表达式模板。
+\end{itemize}
+
+\section{Modern C++}
+
+\subsection{构造object时注意区分()和\{\}}
+\label{sec:Item2-7}
+
+初始化分为三种：括号、等号或者大括号，有时候还可能等号和大括号同时
+出现：
+\begin{verbatim}
+int x(0); // initializer is in parentheses
+int y = 0; // initializer follows "="
+int z{ 0 }; // initializer is in braces
+\end{verbatim}
+
+对于用户定义的类而言，区分赋值和初始化是很重要的，因为会调用不同的函数：
+\begin{verbatim}
+Widget w1; // call default constructor
+Widget w2 = w1; // not an assignment; calls copy ctor
+w1 = w2; // an assignment; calls copy operator=
+\end{verbatim}
+
+C++98无法直接初始化一个具有特定值的STL容器，但是C++11有了通用初始化
+(uniform initialization)就可以了：
+\begin{verbatim}
+std::vector<int> v{ 1, 3, 5 };
+\end{verbatim}
+
+大括号也可以用来为non-static数据成员提供默认初始值：
+\begin{verbatim}
+class Widget {
+private:
+  int x{ 0 }; // fine, x's default value is 0
+  int y = 0; // also fine
+  int z(0); // error!
+};
+\end{verbatim}
+
+不可拷贝的对象（例如\texttt{std::atomics}，见
+Section~\ref{sec:Item2-10}）也可以使用大括号或者括号来初始化，但不能用
+等号：
+\begin{verbatim}
+std::atomic<int> ai1{ 0 }; // fine
+std::atomic<int> ai2(0);   // fine
+std::atomic<int> ai3 = 0;  // error!
+\end{verbatim}
+
+另外，大括号初始化的一个新颖的特点就是\textbf{它禁止built-in类型的隐式
+  narrowing转换}：
+\begin{verbatim}
+double x, y, z;
+int sum1{ x + y + z }; // error! sum of doubles may not be expressible
+as int 
+int sum2(x + y + z); // okay (value of expression truncated to an int)
+int sum3 = x + y;  // ditto
+\end{verbatim}
+
+大括号初始化的另一个值得注意的特性是它不受 C++ 最令人烦恼的解析的影响。
+C++ 规则的一个副作用是，\textbf{任何可以解析为声明的东西都必须被解释为
+  声明}，当开发人员想要默认构造一个对象，但无意中最终声明了一个函数时，
+最令人烦恼的解析最常困扰着他们。 问题的根源在于，如果你想调用带有参数
+的构造函数，你可以这样做：
+\begin{verbatim}
+Widget w1(10); // call Widget ctor with argument 10
+Widget w2(); // most vexing parse! declares a function named w2 that returns a Widget!
+Widget w3{}; // calls Widget ctor with no args
+\end{verbatim}
+
+当然大括号初始化也有缺点，在于有的时候会出现令人惊讶的行为，例如
+Section~\ref{sec:Item2-2}中\texttt{auto}类型推导
+\texttt{std::initializer\_lists}，另外，类如果存在以
+\texttt{std::initializer\_lists}为参数的构造函数，它永远是更高优先级的：
+
+\begin{verbatim}
+class Widget {
+public:
+  Widget(int i, bool b);
+  Widget(int i, double d); 
+  Widget(std::initializer_list<long double> il);
+};
+
+Widget w1(10, true); // calls first ctor
+Widget w2{10, true}; // uses braces, but now calls std::initializer_list ctor
+// (10 and true convert to long double)
+Widget w3(10, 5.0); // calls second ctor
+Widget w4{10, 5.0}; // uses braces, but now calls
+std::initializer_list ctor
+// (10 and 5.0 convert to long double)
+\end{verbatim}
+
+甚至说拷贝构造和移动构造也会被它拦截：
+\begin{verbatim}
+class Widget {
+public:
+  ...
+  operator float() const; // convert to float
+};
+Widget w5(w4); // uses parens, calls copy ctor
+Widget w6{w4}; // uses braces, calls std::initializer_list ctor
+(w4 converts to float, and float converts to long double)
+Widget w7(std::move(w4)); // uses parens, calls move ctor
+Widget w8{std::move(w4)}; // uses braces, calls std::initializer_list ctor
+\end{verbatim}
+
+如果出现narrowing conversions会直接报错，而不是找其他匹配的构造函数：
+\begin{verbatim}
+class Widget {
+public:
+  Widget(int i, bool b); // as before
+  Widget(int i, double d); // as before
+  Widget(std::initializer_list<bool> il);
+}; 
+Widget w{10, 5.0}; // error! requires narrowing conversions
+\end{verbatim}
+
+如果无法与\texttt{std::initialize\_list}的参数相转化，才会去找其他匹配
+的构造函数：
+\begin{verbatim}
+class Widget {
+public:
+  Widget(int i, bool b); // as before
+  Widget(int i, double d); // as before
+  Widget(std::initializer_list<std::string> il);
+}; 
+Widget w1(10, true); // uses parens, still calls first ctor
+Widget w2{10, true}; // uses braces, now calls first ctor
+Widget w3(10, 5.0); // uses parens, still calls second ctor
+Widget w4{10, 5.0}; // uses braces, now calls second ctor
+\end{verbatim}
+
+这里还有有趣的一点，如果使用空的大括号，则默认调用默认构造函数，如果想
+调用空的\texttt{std::initializer\_list}就要用两个大括号：
+\begin{verbatim}
+Widget w1; // calls default ctor
+Widget w2{}; // also calls default ctor
+Widget w3(); // most vexing parse! declares a function
+Widget w4({}); // calls std::initializer_list ctor with empty list
+Widget w5{{}}; // ditto
+\end{verbatim}
+
+所以要注意区分括号和大括号初始化，典型的例子就是\texttt{std::vector}：
+\begin{verbatim}
+std::vector<int> v1(10, 20); // 10-element std::vector, all elements 20
+std::vector<int> v2{10, 20}; // 2-element std::vector, element values are 10 and 20
+\end{verbatim}
+尤其是在写模板的时候，对于内部的object要考虑好要用什么初始化，这是件很
+困难的事情。
+
+\subsection{倾向于使用nullptr而不是0或者NULL}
+\label{sec:Item2-8}
+
+如果 C++ 发现自己在只能使用指针的上下文中看到 0，它会不情愿地将 0 解释
+为空指针，\texttt{NULL}也是一个整型，同理，如果遇到f重载了指针类型和整
+型，就会出现错误：
+\begin{verbatim}
+void f(int); // three overloads of f
+void f(bool);
+void f(void*);
+f(0); // calls f(int), not f(void*)
+f(NULL); // might not compile, but typically calls f(int). Never calls f(void*)
+\end{verbatim}
+
+而\texttt{nullptr}类型为\texttt{std::nullptr\_t}，它可以隐式转换为任何
+指针类型，它绝对不会转换为整型。它还会让语义更好理解，例如：
+\begin{verbatim}
+auto result = findRecord( /* arguments */ );
+if (result == 0) {
+  ...
+}
+
+if (result == nullptr) {
+  ...
+}
+\end{verbatim}
+
+当我们引入模板的时候\texttt{nullptr}表现得更好：
+\begin{verbatim}
+int f1(std::shared_ptr<Widget> spw); // call these only when
+double f2(std::unique_ptr<Widget> upw); // the appropriate
+bool f3(Widget* pw); // mutex is locked
+
+std::mutex f1m, f2m, f3m; // mutexes for f1, f2, and f3
+using MuxGuard = std::lock_guard<std::mutex>;
+
+{
+  MuxGuard g(f1m); // lock mutex for f1
+  auto result = f1(0); // pass 0 as null ptr to f1
+} // unlock mutex
+
+{
+  MuxGuard g(f2m); // lock mutex for f2
+ auto result = f2(NULL); // pass NULL as null ptr to f2
+} // unlock mutex
+
+{
+  MuxGuard g(f3m); // lock mutex for f3
+  auto result = f3(nullptr); // pass nullptr as null ptr to f3
+} // unlock mutex
+\end{verbatim}
+
+可以看到前两个是可以运行的，如果用\texttt{nullptr}替换是通过不了的，我
+们希望只有输入正确的指针类型才可以运行，所以我们可以使用模板：
+\begin{verbatim}
+template<typename FuncType,
+typename MuxType,
+typename PtrType>
+decltype(auto) lockAndCall(FuncType func, MuxType& mutex, PtrType ptr){
+  MuxGuard g(mutex);
+  return func(ptr);
+}
+
+auto result1 = lockAndCall(f1, f1m, 0);    // error!
+auto result2 = lockAndCall(f2, f2m, NULL); // error!
+auto result3 = lockAndCall(f3, f3m, nullptr); // fine
+\end{verbatim}
+
+\subsection{相对于typedef更偏好alias声明}
+\label{sec:Item2-9}
+
+在很多时候alias声明和\texttt{typedef}做的事情相同，例如：
+\begin{verbatim}
+typedef void (*FP)(int, const std::string&);
+using FP = void (*)(int, const std::string&);
+\end{verbatim}
+
+但是当模板引入后就不一样了，因为alias声明可以模板化，而
+\texttt{typedef}只能嵌套在模板化struct中：
+\begin{verbatim}
+template<typename T> // MyAllocList<T>
+using MyAllocList = std::list<T, MyAlloc<T>>;
+
+template<typename T>
+class Widget {
+private:
+  MyAllocList<T> list; // no "typename",
+};
+
+
+template<typename T> 
+struct MyAllocList { 
+  typedef std::list<T, MyAlloc<T>> type;
+};
+template<typename T>
+class Widget { // Widget<T> contains a MyAllocList<T>
+private: 
+  typename MyAllocList<T>::type list; // typename
+};
+\end{verbatim}
+
+编译器知道第一个\texttt{MyAllocList<T>}一定是一个类型，但是不知道
+\texttt{MyAllocList<T>::type}是类型还是\texttt{MyAllocList}的某个特化
+中的其他东西，例如，它认为可能会有这种可能：
+\begin{verbatim}
+template<> 
+class MyAllocList<Wine> {
+private:
+  enum class WineType{ White, Red, Rose }; 
+  WineType type; // in this class, type is a data member!
+};
+\end{verbatim}
+
+如果您完成过任何模板元编程 (TMP)，那么您几乎肯定会遇到需要获取模板类型
+参数并从中创建修改后的类型的需要。例如，给定某种类型\texttt{T}，您可能
+希望删除\texttt{T}包含的任何常量引用限定符，例如，您可能希望将
+\texttt{const std::string\&}转换为\texttt{std::string}等等。
+
+C++11在\texttt{<type\_traits}中提供了这样一些type trait:
+\begin{verbatim}
+std::remove_const<T>::type     // yields T from const T
+std::remove_reference<T>::type // yields T from T& and T&&
+std::add_lvalue_reference<T>::type // yields T& from T
+\end{verbatim}
+而在C++14中对于每一个这样的操作都使用了alias声明：
+\begin{verbatim}
+std::remove_const_t<T>         // yields T from const T
+std::remove_reference_t<T>     // yields T from T& and T&& 
+std::add_lvalue_reference_t<T> // yields T& from T
+\end{verbatim}
+实际上实现就是：
+\begin{verbatim}
+template <class T>
+using remove_const_t = typename remove_const<T>::type; // typename
+\end{verbatim}
+
+\subsection{相比于无作用域的enums更偏向于有作用域的enums}
+\label{sec:Item2-10}
+
+在C++98中，枚举器中的名称包含在包含\texttt{enum}的作用域中，称为无作用
+域的\texttt{enum}(unscoped)，因此不能有
+相同的名称在同一个作用域中：
+\begin{verbatim}
+enum Color { black, white, red }; 
+auto white = false; // error!
+\end{verbatim}
+
+\begin{itemize}
+\item C++11添加了scoped \texttt{enum}，使得\textbf{名字不会泄露}:
+\begin{verbatim}
+enum class Color { black, white, red };
+auto white = false; // fine, no other
+Color c = white; // error! no enumerator named
+// "white" is in this scope
+Color c = Color::white; // fine
+auto c = Color::white; // also fine
+\end{verbatim}
+\item 另外，scoped \texttt{enum}为强类型枚举，而unscoped \texttt{enum}
+  可以隐式转换为整型，\textbf{有的时候会造成语义曲解}：
+\begin{verbatim}
+enum Color { black, white, red }; 
+std::vector<std::size_t> primeFactors(std::size_t x); 
+Color c = red;
+if (c < 14.5) { // compare Color to double (!)
+  auto factors = primeFactors(c); // compute prime factors of a Color (!)
+}
+
+enum class Color { black, white, red }; 
+std::vector<std::size_t> primeFactors(std::size_t x); 
+Color c = red;
+if (c < 14.5) { // error! cannot compare Color and double
+  auto factors = primeFactors(c); // error!
+}
+\end{verbatim}
+如果你真的想这么做的话，需要：
+\begin{verbatim}
+if (static_cast<double>(c) < 14.5) {
+  auto factors = primeFactors(static_cast<std::size_t>(c)); 
+}
+\end{verbatim}
+\item scoped enum第三个优点是可以\textbf{前置声明}:
+\begin{verbatim}
+enum Color; // error!
+enum class Color; // fine
+\end{verbatim}
+这样做的目的是出于每个\texttt{enum}都有一个依赖的整型，这取决于编译器，
+例如：
+\begin{verbatim}
+enum Color { black, white, red };
+\end{verbatim}
+编译器可能会选择\texttt{char}，因为这三个都可以这样表示，然而当取值范
+围很大的时候，例如：
+\begin{verbatim}
+enum Status { good = 0, failed = 1, incomplete = 100,
+ corrupt = 200, indeterminate = 0xFFFFFFFF};
+\end{verbatim}
+这时候编译器就会选一个很大的整型，然而如果我们如果再加一个Status的话，
+\textbf{编译器就需要对整个系统重新进行编译！}然而引入scoped
+\texttt{enum}前置声明就可以解决这个问题：
+\begin{verbatim}
+enum class Status; // forward declaration
+void continueProcessing(Status s); // use of fwd-declared enum
+\end{verbatim}
+编译器默认依赖类型是\texttt{int}，也可以做修改：
+\begin{verbatim}
+enum class Status: std::uint32_t;
+\end{verbatim}
+\end{itemize}
+
+但有一个情况是需要用unscoped \texttt{enum}的，那就是与
+\texttt{std::tuple}相关的时候：
+\begin{verbatim}
+// name email reputation
+using UserInfo = std::tuple<std::string,std::string,std::size_t> ;
+UserInfo uInfo; // object of tuple type
+auto val = std::get<1>(uInfo); // get value of field 1
+\end{verbatim}
+这样看起来是很不舒服的，所以可以：
+\begin{verbatim}
+enum UserInfoFields { uiName, uiEmail, uiReputation };
+UserInfo uInfo;
+auto val = std::get<uiEmail>(uInfo);
+\end{verbatim}
+但是如果使用scoped \texttt{enum}的话看起来会很冗长：
+\begin{verbatim}
+enum class UserInfoFields { uiName, uiEmail, uiReputation };
+UserInfo uInfo;
+auto val = std::get<static_cast<std::size_t>(UserInfoFields::uiEmail)>(uInfo);
+\end{verbatim}
+
+如果想做简化的话就饿可以写一个函数将枚举器转化为它的依赖整型，
+并且保证在编译期就可以使用，那它必须是\texttt{constexpr}函数(见
+Section~\ref{sec:Item2-15})，另外，我们也要声明它为\texttt{nonexcept}
+的，因为我们知道它肯定不会出现异常。
+\begin{verbatim}
+template<typename E> // C++14
+constexpr auto toUType(E enumerator) noexcept{
+  return static_cast<std::underlying_type_t<E>>(enumerator);
+}
+auto val = std::get<toUType(UserInfoFields::uiEmail)>(uInfo);
+\end{verbatim}
+
+\subsection{相比于私有化不定义函数更倾向于deelted函数}
+\label{sec:Item2-11}
+
+在C++98中如果相拒绝用户调用类的拷贝构造或者拷贝赋值，一般采用
+\texttt{private}化，在C++11中开始采用\texttt{delete}修饰符，这样做的好
+处有：
+\begin{itemize}
+\item 即便是类内部或者友元函数想要调用拷贝构造也会报错，
+\item 习惯上\texttt{deleted}函数被声明为\texttt{public}，因为C++会优先
+  检查可调性（accessibility），如果声明为\texttt{private}，可能只会报错说调
+ 试图调用\texttt{private}函数，而忽略了重点。
+\item \texttt{deleted}函数还有一个重要优势在于\textbf{任何函数都可以是
+    \texttt{deleted}的}：
+\begin{verbatim}
+bool isLucky(int number);      // original function
+bool isLucky(char) = delete;   // reject chars
+bool isLucky(bool) = delete;   // reject bools
+bool isLucky(double) = delete; // reject doubles and floats
+// C++ prefers converting float to double rather than int
+\end{verbatim}
+\item  \texttt{deleted}函数的另一个小技巧是避免使用本该不存在的模板实
+  例化：有两种特殊指针，一个是\texttt{void*}，因为它无法解引用也没办法
+  进行加减；另一个是\texttt{char*}，因为它通常表示指针指向一个C风格的
+  字符串而不是单独的一个字符。
+\begin{verbatim}
+template<typename T>
+void processPointer(T* ptr);
+template<>
+void processPointer<void>(void*) = delete;
+template<>
+void processPointer<char>(char*) = delete;
+\end{verbatim}
+  然而要注意的是，如果在一个class内定义一个函数模板，如果你想避免某些
+  特例化，必须在namespace scope下定义特例化\texttt{deleted}函数才可以，
+  因为模板特例化都必须写在namespace scope中：
+\begin{verbatim}
+class Widget {
+public:
+  template<typename T>
+  void processPointer(T* ptr){ ... }
+private:
+  template<> // error!
+  void processPointer<void>(void*);
+};
+template<> 
+void Widget::processPointer<void>(void*) = delete;
+\end{verbatim}
+\end{itemize}
+
+
+\subsection{给每个重写函数声明override}
+\label{sec:Item2-12}
+
+重写（override）和重载（overload）没有任何关系：
+\begin{verbatim}
+class Base {
+public:
+  virtual void doWork(); 
+};
+class Derived: public Base {
+public:
+  virtual void doWork(); // override
+}; 
+std::unique_ptr<Base> upb = std::make_unique<Derived>();
+upb->doWork(); // derived class function is invoked
+\end{verbatim}
+重写必须要满足：
+\begin{itemize}
+\item 基类函数必须是虚函数，
+\item 名称必须相同，除非是析构函数，
+\item 参数类型必须一致，
+\item  函数的const性必须一致，
+\item 返回类型和异常修饰符必须是相容的，
+\item C++11中还加入了函数的引用修饰符必须是一致的：
+\begin{verbatim}
+class Widget {
+public:
+  void doWork() &;  // only when *this is an lvalue
+  void doWork() &&; // only when *this is an rvalue
+}; 
+Widget makeWidget(); // factory function (returns rvalue)
+Widget w;
+w.doWork(); // calls Widget::doWork for lvalues
+makeWidget().doWork(); // calls Widget::doWork for rvalues
+\end{verbatim}
+\end{itemize}
+
+下面四种函数都可以编译通过，但肯定不是你想要的：
+\begin{verbatim}
+class Base {
+public:
+  virtual void mf1() const;
+  virtual void mf2(int x);
+  virtual void mf3() &;
+  void mf4() const;
+};
+class Derived: public Base {
+public:
+  virtual void mf1();               // const
+  virtual void mf2(unsigned int x); // paramType
+  virtual void mf3() &&;            // reference qualifier
+  void mf4() const;                 // no virtual
+};
+\end{verbatim}
+C++中引入了\texttt{override}修饰词，如果都加上的话，程序是无法编译的，
+这样就能确保你声明不会出错，这样做比靠编译器提醒你靠谱得多，如果您正在
+考虑更改基类中虚函数的signature，它还可以帮助您衡量后果。
+
+关于引用修饰符补充一点它使用的地方：
+\begin{verbatim}
+class Widget {
+public:
+  using DataType = std::vector<double>; 
+  DataType& data() { return values; }
+private:
+  DataType values;
+};
+auto vals1 = w.data();
+auto vals2 = makeWidget().data();
+\end{verbatim}
+可以看到第二个拷贝构造是不必要的，我们希望使用移动拷贝构造，所以有：
+\begin{verbatim}
+class Widget {
+public:
+  using DataType = std::vector<double>;
+  DataType& data() & { return values; } // return lvalue
+  DataType data() && { return std::move(values); } // return rvalue
+private:
+  DataType values;
+};
+\end{verbatim}
+
+\subsection{相对于iterators更偏好const\_iterator}
+\label{sec:Item2-13}
+
+\texttt{const\_iterator}就是无法改变其所指向的东西的迭代器，C++14中提
+供了非成员函数来获取迭代器，例如\texttt{std::cbegin},
+\texttt{std::rbegin}等等，但是C++11中只提供了\texttt{std::begin}和
+\texttt{std::end}。在编写更通用的code时，更偏好于这些非成员函数：
+\begin{verbatim}
+template<typename C, typename V>
+void findAndInsert(C& container, const V& targetVal, const V& insertVal) { 
+  using std::cbegin; 
+  using std::cend;
+  auto it = std::find(cbegin(container), cend(container), targetVal);
+  container.insert(it, insertVal);
+}
+
+// C++11 cbegin
+template <class C>
+auto cbegin(const C& container)->decltype(std::begin(container)){
+  return std::begin(container);
+}
+\end{verbatim}
+对于一个\texttt{const}容器，只会返回\texttt{const\_iterator}。
+
+\subsection{如果不会产生异常就将函数声明为noexcept}
+\label{sec:Item2-14}
+
+C++11开始关于异常，一个函数只有两种情况：可能有异常、不存在异常。一个
+函数是否声明为\texttt{noexcept}和是否声明为\texttt{const}一样重要，因
+为它能让编译器产生更好的代码：
+
+如果在运行时，异常离开 f，则违反了 f 的异常规范。 使用 C++98 异常规范，
+调用堆栈将展开到 f 的调用者，并且在执行一些与此处不相关的操作后，程序
+执行将终止。 对于 C++11 异常规范，运行时行为略有不同：堆栈仅可能在程序
+执行终止之前展开。 展开调用堆栈和可能展开调用堆栈之间的差异对代码生成
+有着惊人的巨大影响。在 \texttt{noexcept} 函数中，如果异常将传播到函数
+之外，优化 器不需要将运行时堆栈保持在不可展开状态，也不必确保
+\texttt{noexcept} 函数中的对象在异常时以与构造相反的顺序销毁。
+
+一个典型的例子就是移动操作：
+\begin{verbatim}
+std::vector<Widget> vw;
+Widget w;
+vw.push_back(w);
+\end{verbatim}
+在C++98中如果vector的size等于capacity时，会分配更大的内存然后对每个元
+素进行拷贝，这样有很强的异常安全性，但C++11中如果直接将拷贝换为移动的
+话，如果移动某个元素发生了异常，是无法复原的，因此违背了异常安全性，所
+以C++11中采取的措施是确保移动不出现异常才会用移动构造，否则就用拷贝构
+造，判断的依据就是\texttt{move}操作是否为\texttt{noexcept}的。
+
+另一个典型例子就是STL算法库中的\texttt{swap}函数，它是否为
+\texttt{noexcept}取决于用户定义的\texttt{swap}是否为
+\texttt{nonexcept}:
+\begin{verbatim}
+template <class T, size_t N>
+void swap(T (&a)[N], T (&b)[N]) noexcept(noexcept(swap(*a, *b)));
+
+template <class T1, class T2>
+struct pair {
+void swap(pair& p) noexcept(noexcept(swap(first, p.first))
+                && noexcept(swap(second, p.second)));
+};
+\end{verbatim}
+这些函数叫做条件性\texttt{noexcept}。
+
+在C++11中所有memory deallocation函数和所有析构函数都是隐式
+\texttt{noexcept}的
+
+\subsection{尽可能用使用constexpr}
+\label{sec:Item2-15}
+
+\texttt{constexpr}修饰一个object的时候意味着它是常量并且编译期间可知，
+例如数组的尺寸，模板参数，枚举值都是编译期间可知的，但是
+\texttt{constexpr function}会更有趣一点：如果它用compile-time常量调用
+的时候就会返回compile-time常量，否则就会返回runtime值，这样很好的避免
+了duplication：
+\begin{verbatim}
+constexprint pow(int base, int exp) noexcept { ... }
+constexpr auto numConds = 5; 
+std::array<int, pow(3, numConds)> results;
+auto baseToExp = pow(base, exp); // call pow function at runtime
+\end{verbatim}
+
+在C++11中\texttt{constexpr}函数最多只能有一句return，但C++14放宽了要求：
+\begin{verbatim}
+constexpr int pow(int base, int exp) noexcept{
+  return (exp == 0 ? 1 : base * pow(base, exp - 1));
+}
+constexpr int pow(int base, int exp) noexcept{
+  auto result = 1;
+  for (int i = 0; i < exp; ++i) result *= base;
+  return result;
+} // C++14
+\end{verbatim}
+
+如果有一个类满足它的构造函数和其他成员函数都是\texttt{constexpr}的，例
+如：
+\begin{verbatim}
+class Point {
+public:
+  constexpr Point(double xVal = 0, double yVal = 0) noexcept: x(xVal), y(yVal){}
+  constexpr double xValue() const noexcept { return x; }
+  constexpr double yValue() const noexcept { return y; }
+  // C++14
+  constexpr void setX(double newX) noexcept { x = newX; }
+  constexpr void setY(double newY) noexcept { y = newY; }
+private:
+  double x, y;
+};
+\end{verbatim}
+那么这个类的object也可以是\texttt{constexpr}的。
+
+\subsection{让const成员函数是线程安全的}
+\label{sec:Item2-16}
+
+\begin{verbatim}
+class Polynomial {
+public:
+  using RootsType = std::vector<double>;
+  RootsType roots() const{
+    if (!rootsAreValid) { 
+      ...  
+      rootsAreValid = true;
+    }
+    return rootVals;
+  }
+private:
+  mutable bool rootsAreValid{ false };
+  mutable RootsType rootVals{}; // on initializers
+};
+\end{verbatim}
+
+当有两个线程求根的时候，这样做是线程不安全的，最简单的解决办法就是加入
+一个\texttt{mutex}：
+\begin{verbatim}
+class Polynomial {
+public:
+  RootsType roots() const{
+    std::lock_guard<std::mutex> g(m); // lock mutex
+    ...
+    return rootVals;
+  } // unlock mutex
+private:
+  mutable std::mutex m;
+};
+\end{verbatim}
+
+这里值得一提的是\textbf{\texttt{std::mutex}只能进行移动，因此这样做的
+  话会导致\texttt{Polynomial}类不再能进行拷贝，只能进行移动}。
+
+很多时候，我们也可以采用更经济的方法\texttt{std::atomic}（一个其他线程
+保证看到其操作不可分割地发生的类），例如我们有时候想看一个函数被调用了
+多少次：
+\begin{verbatim}
+class Point {
+public:
+  double distanceFromOrigin() const noexcept {
+    ++callCount; // atomic increment
+    return std::sqrt((x * x) + (y * y));
+  }
+private:
+  mutable std::atomic<unsigned> callCount{ 0 };
+  double x, y;
+};
+\end{verbatim}
+\textbf{当然，\texttt{std::atomic}也是只能移动的类。}
+
+\begin{verbatim}
+class Widget {
+public:
+int magicValue() const{
+  if (cacheValid) return cachedValue;
+  else {
+    auto val1 = expensiveComputation1();
+    auto val2 = expensiveComputation2();
+    cachedValue = val1 + val2; // uh oh, part 1
+    cacheValid = true; // uh oh, part 2
+    return cachedValue;
+  }
+}
+private:
+  mutable std::atomic<bool> cacheValid{ false };
+  mutable std::atomic<int> cachedValue;
+};
+\end{verbatim}
+
+这时候虽然可以运行，但是效率上有一些问题：当第二个线程调用
+\texttt{magicValue}的时候，看到\texttt{cacheValid}是\texttt{false}，它
+就会等到第一个线程结束的时候立刻再去跑一遍。
+
+这个时候我们只需要调换一下part 1 和 2的顺序就可以，但是如果更多的变量
+和逻辑加入进来该怎么办呢？
+
+所以这里的经验是如果只有单个变量或者内存需要同步，就使用
+\texttt{std::atomic}，否则用\texttt{mutex}。
+
+\subsection{了解特殊的成员函数生成}
+\label{sec:Item2-17}
+
+special member functions指的是C++愿意自己创造的函数：默认构造函数、析
+构函数、拷贝构造、拷贝赋值、移动构造、移动赋值函数。
+
+移动构造和移动赋值和其他的行为类型：它们会在被需要的时候产生，默认移动
+构造会移动构造每个非静态成员（包括基类部分的），移动赋值同理。这里要注
+意一点的是，memberwise移动是指那些支持移动操作的数据成员进行移动，否则
+就进行拷贝，Section~\ref{sec:Item2-23}会详细来讲这里的细节。
+
+与拷贝操作不同的是，拷贝构造和拷贝赋值是独立的，声明一个不会影响编译器
+默认生成另一个。然而\textbf{移动操作却不是独立的，声明了一个会阻止编译
+  器默认生成另一个。}
+
+另外，\textbf{如果类已经明确声明了一个拷贝操作，那么默认移动操作就不会
+生成。}另一个方向也是成立的，\textbf{如果类已经明确声明了一个移动操
+作，那么默认拷贝操作就不会生成（delete）。}
+
+\textbf{The Rule of Three}规定，如果声明复制构造函数、复制赋值运算符或
+析构函数中的任何一个，则应声明所有这三个函数。 它源于这样的观察：接管
+复制操作的含义的需要几乎总是源于执行某种资源管理的类，并且这几乎总是意
+味着
+\begin{itemize}
+\item 在一个复制操作中完成的任何资源管理可能需要在另一复制操作中完成,
+\item 类析构函数也将参与资源的管理（通常是释放它）。 要管理的经典资源
+是内存，这就是为什么所有管理内存的标准库类（例如，执行动态内存管理的
+STL 容器）都声明“三巨头”：复制操作和析构函数。  
+\end{itemize}
+
+C++11中如果用户定义了析构函数或者拷贝操作，就不会生成默认的移动操作，
+因此合成移动操作只有满足三个条件时才会产生：
+\begin{itemize}
+\item 类中没有声明拷贝操作，
+\item 没有声明移动操作，
+\item 没有声明析构函数。
+\end{itemize}
+同样的道理也适用于拷贝操作，如果想用默认的操作，可以添加后缀
+\texttt{=default}.
+
+另外，请注意，规则中没有关于成员函数模板的存在阻止编译器生成特殊成员函
+数的内容：
+\begin{verbatim}
+class Widget {
+  template<typename T> // construct Widget from anything
+  Widget(const T& rhs);
+  template<typename T>
+  Widget& operator=(const T& rhs);
+};
+\end{verbatim}
+编译器仍然会自动生成拷贝操作和移动操作，在Section~\ref{sec:Item2-26}会
+将其中的原因。 
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "../CppLearning"

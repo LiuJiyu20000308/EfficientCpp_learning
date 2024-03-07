@@ -1,6 +1,20 @@
 \clearpage
 \section{Appendix}
 
+\subsection{三五法则}
+\label{sec:ThreeFive}
+
+\begin{itemize}
+\item 需要析构函数的类也需要拷贝构造函数和拷贝赋值函数。
+\item  需要拷贝操作的类也需要赋值操作，反之亦然。需要拷贝操作代表这个
+  类在拷贝时需要进行一些额外的操作。赋值操作=先析构+拷贝，所以拷贝需要
+  的赋值也需要。反之亦然。
+\item 析构函数不能是私有的或删除的，否则成员便无法销毁。
+\item 如果一个类有私有的或不可访问的析构函数，那么其默认和拷贝构造函数
+  会被定义为删除的。
+\item 如果一个类有\texttt{const}或引用成员，则不能使用默认的拷贝赋值操
+  作。 
+\end{itemize}
 \subsection{智能指针}
 \label{sec:SmartPointer}
 \texttt{shared\_ptr}使用了引用计数（use count）技术，当复制个
